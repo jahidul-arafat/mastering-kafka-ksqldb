@@ -9,6 +9,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,10 @@ public class DslExample {
                             lenCalFunc.apply(value),
                             isTooShort.apply(value));
                     System.out.println(formattedString);
+
+                    String formattedStringForAppendOnly = String.format("%s,%d,%s",
+                            value,lenCalFunc.apply(value),isTooShort.apply(value));
+                    appendToFile("output.txt", formattedStringForAppendOnly);
                 });
 
 
@@ -78,6 +85,16 @@ public class DslExample {
         // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
+    }
+
+    // method to write a string into a text file into append only mode
+    public static void appendToFile(String filename, String content) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
+            writer.write(content + "\n");
+        } catch (IOException e) {
+            e.printStackTrace();
+            // Handle the exception as needed (e.g., log it or throw it)
+        }
     }
 
 }
