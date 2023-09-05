@@ -17,12 +17,12 @@ public class TweetSerializer implements Serializer<Tweet> {
     Gson gson = new Gson();
 
     @Override
-    public byte[] serialize(String topic, Tweet data) {
+    public byte[] serialize(String topic, Tweet javaObjData) {
         // don't create if tweet is null
-        if (data == null) return  null;
+        if (javaObjData == null) return  null;
 
         // ele convert the Java Object i.e. Tweet into JSON string, then return as byte stream
-        return gson.toJson(data).getBytes(StandardCharsets.UTF_8);
+        return gson.toJson(javaObjData).getBytes(StandardCharsets.UTF_8);
 
     }
 }
