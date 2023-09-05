@@ -9,11 +9,34 @@ plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'java'
     id 'application'
+
+    // https://plugins.gradle.org/plugin/com.commercehub.gradle.plugin.avro
+    id "com.github.davidmc24.gradle.plugin.avro" version "1.3.0" // plugin to autogenerate Java Classes from Avro schema during Build time
+}
+
+
+ext{
+    avroVersion = "1.11.0"
+    kafkaVersion = "2.7.0"
 }
 
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
+
+    // required for schema-registry-compatible Avro Serdes provided by Confluent
+    maven {
+        url "https://packages.confluent.io/maven/" // add the repository; this is where the artifact for the Schema registry-aware Avro serdes lives
+    }
+}
+
+
+
+avro {
+    fieldVisibility = 'PRIVATE'
+    //source= file("src/main/avro")
+    //outputDir = file("src/main/java")
+
 }
 
 dependencies {
@@ -24,9 +47,31 @@ dependencies {
 
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:32.1.1-jre'
-    implementation 'org.apache.kafka:kafka-streams:2.7.0'
+    implementation "org.apache.kafka:kafka-streams:${kafkaVersion}"
+
     // required for JSON serializer
     implementation 'com.google.code.gson:gson:2.8.9'
+
+    // required for registryless Avro
+    implementation 'org.apache.avro:avro:1.11.0' // compatibility with avro 1.3.0 // contains the core classes for Working with Avro
+    //implementation 'org.apache.avro:avro-tools:1.10.0'
+
+    // https://github.com/mitch-seymour/kafka-registryless-avro-serdes
+    implementation 'com.mitchseymour:kafka-registryless-avro-serdes:1.0.0' // for writing sentimentEnrichedRecord to output kafka Topic
+                                                                            // Kafka is a byte-in and byte-out stream processing platform
+                                                                            // -- Payload Size is large
+                                                                            // ++ No additional point of failure
+                                                                            // ++ Easy to use
+
+    // required for registry oriented Avro provided by Confluent
+    // required for schema-registry-compatible Avro Serdes
+    // Schema Registry running at http://localhost:8081
+    implementation ('io.confluent:kafka-streams-avro-serde:6.0.1') { // required dependency for using a Schema Registry-aware Avro serdes
+        // this was required for the 2.7 upgrade, since the kafka-streams-avro-serde
+        // pulls in an incompatible transitive dependency (org.apache.kafka:kafka-clients:6.0.1-ccs)
+        exclude group: 'org.apache.kafka', module: 'kafka-clients' // exclude the incompatible transitive dependency at the time of writing to the output Kafka Topic
+    }
+
 
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.22'
@@ -60,7 +105,7 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
-task runDSL(type: JavaExec) {
+task runTweeterCrypto(type: JavaExec) {
     main = 'com.example.App'
     classpath sourceSets.main.runtimeClasspath
 }
@@ -68,4 +113,13 @@ task runDSL(type: JavaExec) {
 //task runProcessorAPI(type: JavaExec) {
 //    main = 'com.example.ProcessorApiExample'
 //    classpath sourceSets.main.runtimeClasspath
+//}
+
+//def generateAvro= tasks.register("generateAvro",GenerateAvroJavaTask){
+//    source("src/main/avro")
+//    outputDir = file("src/main/java")
+//}
+//
+//tasks.named("compileJava").configure {
+//    source("generateAvro")
 //}

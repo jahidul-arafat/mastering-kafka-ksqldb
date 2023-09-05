@@ -33,7 +33,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor // default constructor
 public class Tweet {
-    @SerializedName("CreatedAt") // Gson's SerializedName annotation; This allows Gson to deserialize JSON objects into Java Objects with different field name
+    @SerializedName("CreatedAt")
+    // Gson's SerializedName annotation; This allows Gson to deserialize JSON objects into Java Objects with different field name
     private Long createdAt;
 
     @SerializedName("Id")
@@ -47,4 +48,11 @@ public class Tweet {
 
     @SerializedName("Text")
     private String text;
+
+    //@SerializedName("User")
+    //private User user;
+
+    public boolean isRetweet() {
+        return retweet;
+    }
 }
