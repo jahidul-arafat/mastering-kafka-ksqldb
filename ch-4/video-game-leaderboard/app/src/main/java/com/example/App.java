@@ -3,12 +3,34 @@
  */
 package com.example;
 
+import com.example.topology.LeaderBoardTopology;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+
+import java.util.Properties;
+
 public class App {
-    public String getGreeting() {
-        return "Hello World!";
-    }
 
     public static void main(String[] args) {
-        System.out.println(new App().getGreeting());
+        System.out.println("Kafka Stateless Video Game Lea Stream Simulation");
+        Topology topology = LeaderBoardTopology.build(); // class method ClassName.methodName()
+
+        // set the required properties for running Kafka Streams
+        Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev1");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
+        //config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // build the topology with configuration properties set above
+        KafkaStreams streams = new KafkaStreams(topology, config);
+
+        // Add a shutdown hook to gracefully stop the Kafka Streams application when a global shutdown signal is received.
+        //Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+
+
+        // Start the Streams
+        System.out.println(" Starting Video game Leaderboard");
+        streams.start();
     }
 }

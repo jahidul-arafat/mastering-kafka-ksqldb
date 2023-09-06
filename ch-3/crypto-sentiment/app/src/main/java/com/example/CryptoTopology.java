@@ -46,7 +46,11 @@ public class CryptoTopology {
 
         KStream<byte[], Tweet> source = builder.stream(
                 "tweets",
-                Consumed.with(Serdes.ByteArray(), new TweetSerde())); // this will let the Stream populated with Tweet objects instead of byte array
+                Consumed.with(
+                        Serdes.ByteArray(), // Key of the record will be deserialized as ByteArray
+                        new TweetSerde()    // Value of the record will be deserialized as a Tweet object
+                ));
+        // this will let the Stream populated with Tweet objects instead of byte array
 
         // B. STREAM PROCESSOR - to print the KStream
         // Why Keys are still being serialized using byte[]
@@ -97,7 +101,7 @@ public class CryptoTopology {
         // B4. Merge these two streams : englistStream and TranslatedTweetStream into a Single Kafka Stream
         // Merging is opposite to Branching operations
         // Why Merging? To avoid unnecessary code duplication and as same processing logic can be applied to both streams. So, better to merge together
-        KStream<byte[], Tweet> mergedStream = englishStream.merge(translatedStream);
+        KStream<byte[], Tweet> mergedStream = englishStream.merge(translatedStream); // merge operation is stateless, unconditional merge
         //getPrint(mergedStream, "merged-tweet-stream"); // new implementation
 
         //B4. Sentiment Analysis
