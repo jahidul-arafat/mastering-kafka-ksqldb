@@ -3,6 +3,8 @@ package com.example.topology;
 import com.example.model.Player;
 import com.example.model.Product;
 import com.example.model.ScoreEvent;
+import com.example.model.stateful_join_models.EnrichedWithAll;
+import com.example.model.stateful_join_models.ScoredWithPlayer;
 import com.example.serdes.wrapper.JsonSerdes;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -114,13 +116,18 @@ public class LeaderBoardTopology {
             1|{"id": 1, "name": "Super Smash Bros"} --> Keyed By Product/Game ID
             - We only care about the latest state of the product i.e. the productName and its id
          */
-//        GlobalKTable<String, Product> productSource = topologyStreamBuilder
-//                .globalTable(
-//                        "products",
-//                        Consumed.with(  // define how records will be consumed
-//                                Serdes.String(), // Key of the record will be deserialized as String
-//                                JsonSerdes.Product() // Value of the record will be deserialized to Product Object using JsonSerdes
-//                        ));
+
+        GlobalKTable<String, Product> productSource = topologyStreamBuilder
+                .globalTable(
+                        "products",
+                        Consumed.with(
+                                Serdes.String(),
+                                JsonSerdes.Product()
+                        )
+                );
+
+        // Use the 'productSource' as needed here
+
 
 
         // C. JOIN Operations
@@ -159,7 +166,38 @@ public class LeaderBoardTopology {
         scoreEvents.join(players, ...);                 // right side is always passed as a parameter to the join operation
          */
 
+        // C1.1 Define Join Predicate
+        // Joining 'score-events'-> Stream and 'players'-> KTable and returns a new Java Object 'ScoredWithPlayer'
+        // Using 'ValueJoiner', takes two inputs: ScoreEvent and Player; returns 'ScoredWithPlayer' Java Object
+        ValueJoiner<ScoreEvent,Player, ScoredWithPlayer> predicate_Score_Player_Joiner=
+                (score,player)-> new ScoredWithPlayer(score,player); // lambda expression // but Scored
+
+        // C1.2 Define Join Settings
+        // Define the Serialization/Deserlialization settings for the keys and values when performing a stream-table join operation
+        // Joined<Key, LeftTable, RightTable>
+        Joined<String, ScoreEvent,Player> settings_playerJoinParams =
+                Joined.with(
+                        Serdes.String(), // indicates the keys in both tables are expected to be deserialized as String
+                        JsonSerdes.ScoreEvent(), // how to deserialize the ScoreEvent object from binary data (JSON)
+                        JsonSerdes.Player()); // how to deserialize the event/json data to Player object
+
+        // C1.3 Perform Actual inner join operation; key at both table should match
+        // KStream<Key,Value>
+        // This join triggers error in Mac M1
+        // rocksDB does not support Apple Silicon natively yet.
+        KStream<String, ScoredWithPlayer> scoreWithPlayer =
+                scoreEventSource.join(
+                        playerSource,
+                        predicate_Score_Player_Joiner,
+                        settings_playerJoinParams);
+        getPrintStream(scoreWithPlayer, "score-with-players");
+
+
+
         // C2. KStream-GlobalKTable Join: Joining 'ScoredWithPlayer' and 'Product/Game'
+//        ValueJoiner<ScoredWithPlayer, Product, EnrichedWithAll> predicate_ScoreWithPlayer_Product_Joiner=
+//                EnrichedWithAll::new; // lambda expression // but EnrichedWithAll constructor implemented in a different way
+
 
 
 

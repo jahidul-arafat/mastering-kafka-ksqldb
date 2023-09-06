@@ -9,11 +9,13 @@ plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'java'
     id 'application'
+
 }
 
 ext {
     // https://search.maven.org/artifact/org.apache.kafka/kafka-streams
-    kafkaVersion = '2.7.0'
+    //kafkaVersion = '2.7.0'
+    kafkaVersion = '3.5.1'
 }
 
 repositories {
@@ -23,6 +25,7 @@ repositories {
 
 dependencies {
     // kafka
+    //https://mvnrepository.com/artifact/org.apache.kafka/kafka-streams
     implementation "org.apache.kafka:kafka-streams:${kafkaVersion}"
 
     // required for JSON serializer
@@ -40,6 +43,13 @@ dependencies {
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.22'
     annotationProcessor 'org.projectlombok:lombok:1.18.22'
+
+    //rocksdb
+    // https://mvnrepository.com/artifact/org.rocksdb/rocksdbjni?repo=redhat-ga
+    //implementation 'org.rocksdb:rocksdbjni:5.18.4'
+    implementation 'org.rocksdb:rocksdbjni:8.3.2'   // without
+
+
 }
 
 // for lombok support
