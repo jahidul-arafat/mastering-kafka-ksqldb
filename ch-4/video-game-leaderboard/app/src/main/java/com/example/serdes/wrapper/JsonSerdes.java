@@ -36,9 +36,9 @@ public class JsonSerdes {
 
     // Class Method-3
     public static Serde<ScoreEvent> ScoreEvent() {
-        JsonSerializer<ScoreEvent> serializer = new JsonSerializer<>();
+        JsonSerializer<ScoreEvent> serializer = new JsonSerializer<>(); // serializing the Java ScoreEvent object to byte[] stream
         JsonDeserializer<ScoreEvent> deserializer = new JsonDeserializer<>(ScoreEvent.class); // destinationClass -> Player
-        // Means, deserialized the rawJsonBytes into a Java Player Object
+        // Means, deserialized the rawJsonBytes into a Java ScoreEvent Object
         return Serdes.serdeFrom(serializer, deserializer);
 
     }
@@ -47,7 +47,7 @@ public class JsonSerdes {
     public static Serde<EnrichedWithAll> EnrichedWithAll() {
         JsonSerializer<EnrichedWithAll> serializer = new JsonSerializer<>();
         JsonDeserializer<EnrichedWithAll> deserializer = new JsonDeserializer<>(EnrichedWithAll.class); // destinationClass -> Player
-        // Means, deserialized the rawJsonBytes into a Java Player Object
+        // Means, deserialized the rawJsonBytes into a Java EnrichedWithAll Object
         return Serdes.serdeFrom(serializer, deserializer);
 
     }
@@ -56,7 +56,7 @@ public class JsonSerdes {
     public static Serde<HighScores> HighScores() {
         JsonSerializer<HighScores> serializer = new JsonSerializer<>();
         JsonDeserializer<HighScores> deserializer = new JsonDeserializer<>(HighScores.class); // destinationClass -> Player
-        // Means, deserialized the rawJsonBytes into a Java Player Object
+        // Means, deserialized the rawJsonBytes into a Java HighScores Object
         return Serdes.serdeFrom(serializer, deserializer);
 
     }

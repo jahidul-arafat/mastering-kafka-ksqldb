@@ -66,7 +66,7 @@ public class LeaderBoardTopology {
          */
 
         // KStream<k,v>: k-> not required, v-> ScoreEvent JavaObject
-        // Without Re-keying: Not suitable for join operation witn KTable 'players'
+        // Without Re-keying: Not suitable for join operation with KTable 'players'
 //        KStream<byte[], ScoreEvent> scoreEventSource = topologyStreamBuilder
 //                .stream(
 //                        "score-events",
@@ -86,13 +86,14 @@ public class LeaderBoardTopology {
                         ))
                 // repartition with new key 'player_id' // for join operation with KTable 'players' later
                 // rekeying ensure related records/events appear on the same partition
-                // rekeying require a temporary topic i.e. 'temp-score-events' generated automatcally, which is later read by the main Kafka Topic 'score-events'
+                // rekeying require a temporary topic i.e. 'temp-score-events' generated automatically, which is later read by the main Kafka Topic 'score-events'
                 // So, Network trip is required, making rekey an expensive operation
                 .selectKey((k, v) -> v.getPlayerId().toString()); // select the key for rekeying // rekeying using player_id
 
         getPrintStream(scoreEventSource, "score-events"); // STREAM PROCESSOR to print only | (Test Only)
 
-        // B2. KTable Abstraction to read from topic "players" // partitioned across all application instances // time sync
+        // B2. KTable Abstraction to read from topic "players"
+        // partitioned across all application instances // time sync
         /*
             1|{"id": 1, "name": "Elyse"}        --> Keyed by Player ID
             - We only care about the latest state of the player i.e. the playerName and his/her id
@@ -169,8 +170,9 @@ public class LeaderBoardTopology {
         // C1.1 Define Join Predicate
         // Joining 'score-events'-> Stream and 'players'-> KTable and returns a new Java Object 'ScoredWithPlayer'
         // Using 'ValueJoiner', takes two inputs: ScoreEvent and Player; returns 'ScoredWithPlayer' Java Object
+        // ValueJoiner(input,input, output)
         ValueJoiner<ScoreEvent,Player, ScoredWithPlayer> predicate_Score_Player_Joiner=
-                (score,player)-> new ScoredWithPlayer(score,player); // lambda expression // but Scored
+                ScoredWithPlayer::new; // lambda expression // but Scored
 
         // C1.2 Define Join Settings
         // Define the Serialization/Deserlialization settings for the keys and values when performing a stream-table join operation
@@ -185,18 +187,125 @@ public class LeaderBoardTopology {
         // KStream<Key,Value>
         // This join triggers error in Mac M1
         // rocksDB does not support Apple Silicon natively yet.
-        KStream<String, ScoredWithPlayer> scoreWithPlayer =
+        // avoid using Kafka 2.7.0, upgrade to Kafka 3.5.1 with rocksdb 8.3.2
+        KStream<String, ScoredWithPlayer> join_ScoreWithPlayer =
                 scoreEventSource.join(
                         playerSource,
                         predicate_Score_Player_Joiner,
                         settings_playerJoinParams);
-        getPrintStream(scoreWithPlayer, "score-with-players");
+        getPrintStream(join_ScoreWithPlayer, "score-with-players");
 
+        /*
+        At this point, if we look at the kafka topics, we get something like below
+        __consumer_offsets  // keeps track of which event/record from each topic is read by consumer
+                            // here kafka stores the position of the last consumerd message for each partition of each topic
+                            // kafka uses this to store metadata of the 'consumer-group'
+                            // in the case consumer (my Java Application) crashes or new consumer joins a group, this determine where each consumer should resume reading from
+
+        dev1-KSTREAM-KEY-SELECT-0000000001-repartition  // automatically created by Join operation as a temporary placeholder
+                                                        //for the join output before streaming back to the 'score-events' topic
+        dev1-players-STATE-STORE-0000000003-changelog   // for fault tolerance, event states are stored here.
+                                                        // in the case of failure, event state stores can be restored by replying the individual events from the underlying changelog topic to reconstruct the state of the application
+        high-scores
+        players
+        products
+        score-events
+
+         */
 
 
         // C2. KStream-GlobalKTable Join: Joining 'ScoredWithPlayer' and 'Product/Game'
-//        ValueJoiner<ScoredWithPlayer, Product, EnrichedWithAll> predicate_ScoreWithPlayer_Product_Joiner=
-//                EnrichedWithAll::new; // lambda expression // but EnrichedWithAll constructor implemented in a different way
+        // Target: [enriched-with-all]: 3(player_id), EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0)
+        /*
+        Preflight Checklist:
+        - GTTable(Product) and KStream(ScoredWithPlayer) need not to share the same key
+        - Unlike, KTable (where events/recrods are partitioned across all application instances),
+        GlobalKTable (where events/recrods are full replicated across all application instances)
+        - Means local task observing a topic partition has the full copy of the GlobalKTable records
+         */
+        // Then how to perform the KStream-GlobalKTable join operation ?
+        // Solution Strategy: KeyValueMapper | how to map a KStream record/event to a GlobalKTable record/event?
+        /*
+        Solution Step:
+        - ScoredWithPlayer event/record
+        [score-with-players]: 1(key_player_id), ScoredWithPlayer(scoreEvent=ScoreEvent(playerId=1, productId=1, score=1000.0), player=Player(id=1, name=Elyse))
+
+        - Product event/record
+        1(key_product_id)|{"id": 1, "name": "Super Smash Bros"}
+
+        ** Ses, both event/records have different keys. But for mapping, we need to say that map with the Product_ID.
+
+        - Extract the ProductID from the ScoredWithPlayer to map these records to a Product
+         */
+
+        // C2.1 Define Joining Strategy
+        /* keyValueMapper(
+            String_key type of score_event stream,                              // input key type, the player id of each record
+            Stream_ScoredWithPlayer_ value type for the score_event stream,     // input value type
+            String_ is lookup keytype at both tables                            // output key type , the product id of each record extracted
+
+            )
+
+         */
+        // Get the productId from the ScoredWithPlayer joined stream
+        // KeyValueMapper - is a function interface having only one abstract method called 'apply'
+        // [enriched-with-all]: 3(player_id), EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0)
+        KeyValueMapper<String, ScoredWithPlayer, String> settings_scoredWithPlayer_Product_keyValueMapper =
+                (leftKey_of_scoreWithPlayer, scoreWithPlayer)-> { // leftKey --> PlayerId
+                    return String.valueOf(scoreWithPlayer.getScoreEvent().getProductId()); // return output key type 'ProductID'
+                };
+
+
+        // C2.2 Joining Predicts, what we are joining and expected output
+        // ValueJoiner<input,input,output>
+        ValueJoiner<ScoredWithPlayer,Product,EnrichedWithAll> predicate_ScoreWithPlayer_Product_Joiner=
+                EnrichedWithAll::new; // redefined constructor at EnrichedWithAll class
+
+        // C2.3 Perform the actual join operation
+        // latest join stream: join_scoreWithPlayer
+        // KStream<key,value>
+        KStream<String, EnrichedWithAll> join_ScoreWithPlayer_Product =
+                join_ScoreWithPlayer.join( // updated joined KStream
+                        productSource, // GlobalKTable
+                        settings_scoredWithPlayer_Product_keyValueMapper,
+                        predicate_ScoreWithPlayer_Product_Joiner);
+        getPrintStream(join_ScoreWithPlayer_Product, "enriched-with-all");
+
+
+        // D. Grouping :: Prerequisite for Aggregation
+        // Task: Calcluate the high scores of each product id
+        /*
+        {"score": 9000.0, "product_id": 6, "player_id": 3}
+        {"score": 1200.0, "product_id": 6, "player_id": 4}
+        [enriched-with-all]: 3 (Player_ID), EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0)
+         */
+        //  Grouping the enriched records to perform aggregation
+        /*
+        Why Grouping?
+        - Same to rekeying
+        - to make sure the related records are in the same partition processed by the same task observer
+
+        How Grouping is done?
+        - groupBy - similar to selectKey, as key chanring opeating, required repartitioning. Repartitining is costly, network call required
+        - groupByKey - no repartition needed. Not costly as no repartition, thereby no network call required.
+         */
+        // Which grouping strategy we will apply?
+        /*
+        - Since enrichedStream is grouped by PlayerID not by ProductID,
+        when required top 3 high scores per ProductID,
+        we need to repartition the enrichedStream grouping by ProductID(higher_score_1, higher_score_2, higher_score_3)
+        - So we will be using 'groupBy' - rekey, repartition and network call
+         */
+        // KGroupedStream<Key, Value>
+        KGroupedStream<String,EnrichedWithAll> groupByProductId_on_EnrichedWithAll =
+                join_ScoreWithPlayer_Product.groupBy(
+                        (key, value) -> value.getProductId().toString(), // lambda expression as key selector// key // group by productId // rekey //repartition // network call
+                        Grouped.with(Serdes.String(), JsonSerdes.EnrichedWithAll()) // value // group with JsonSerdes.EnrichedWithAll() for serialization and deserialization
+                );
+
+
+        // E. Aggregation// to convert the KGroupedStream to a KStream or KTable
+        // Calculate the top 3 high scores per ProductID/Game
 
 
 
