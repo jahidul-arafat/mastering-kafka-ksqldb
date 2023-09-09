@@ -3,10 +3,15 @@
  */
 package com.example;
 
+import com.example.model.restful_exposed_models.HighScores;
 import com.example.topology.LeaderBoardTopology;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.util.Properties;
 
@@ -29,8 +34,31 @@ public class App {
         //Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
 
+
         // Start the Streams
         System.out.println(" Starting Video game Leaderboard");
         streams.start();
+
+        // Put this in a separate class named "LeaderboardService""
+        // Create a queryable read-only copy of the state-store "top3-high-scores-per-game-state-store"
+        // ReadOnlyKeyValueStore<K,V> is an interface
+        // Records/Event in the original state-store
+        /*
+        [top3-high-scores-per-game] -> 6, HighScores(
+            highScoreSet=[
+                EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0),
+                EnrichedWithAll(playerId=2, playerName=Mitch, productId=6, gameName=Mario Kart, score=2500.0),
+                EnrichedWithAll(playerId=4, playerName=Sammy, productId=6, gameName=Mario Kart, score=1200.0)])
+        [top3-high-scores-per-game] -> 1, HighScores(
+            highScoreSet=[
+                EnrichedWithAll(playerId=3, playerName=Isabelle, productId=1, gameName=Super Smash Bros, score=4000.0),
+                EnrichedWithAll(playerId=2, playerName=Mitch, productId=1, gameName=Super Smash Bros, score=2000.0),
+                EnrichedWithAll(playerId=1, playerName=Elyse, productId=1, gameName=Super Smash Bros, score=1000.0)])
+         */
+        ReadOnlyKeyValueStore<String, HighScores> queryableReadOnlyStateStoreForTop3HighScoresPerGameStateStore =
+                streams.store(StoreQueryParameters.fromNameAndType(
+                        "top3-high-scores-per-game-state-store", // state-store name
+                        QueryableStoreTypes.keyValueStore()     // state-store type // multiple state-store types available
+                ));
     }
 }
