@@ -10,6 +10,8 @@ import com.example.serdes.serializer.JsonSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 
+import java.util.List;
+
 public class JsonSerdes {
     // These Serdes i.e. wrapper of serializer and deserializer for each Object Type i.e. Player, Product, ScoreEvent
     // are defined 'static', means they are Class Method, not an Object Method and can only be accessed via
@@ -18,9 +20,9 @@ public class JsonSerdes {
 
     // Class Method-1
     public static Serde<Player> Player() {
-        JsonSerializer<Player> serializer = new JsonSerializer<>();
+        JsonSerializer<Player> serializer = new JsonSerializer<>(); // JavaObject to Byte[] stream
         JsonDeserializer<Player> deserializer = new JsonDeserializer<>(Player.class); // destinationClass -> Player
-        // Means, deserialized the rawJsonBytes into a Java Player Object
+                                                        // Means, deserialized the rawJsonBytes into a Java Player Object
         return Serdes.serdeFrom(serializer, deserializer);
 
     }
@@ -60,6 +62,5 @@ public class JsonSerdes {
         return Serdes.serdeFrom(serializer, deserializer);
 
     }
-
 
 }

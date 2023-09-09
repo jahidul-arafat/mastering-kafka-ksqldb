@@ -1,6 +1,7 @@
 package com.example.playground;
 
 import com.sun.source.tree.Tree;
+import org.apache.kafka.streams.kstream.Initializer;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -78,6 +79,30 @@ public class Playground {
                .collect(Collectors.groupingBy(Map.Entry::getValue,
                         Collectors.counting()));
         groupedMapByNameCount.forEach((key, value) ->System.out.println(key + " : " + value));
+
+        // ListStringAdder
+        ListAdder listStringAdder = new ListAdder();
+        listStringAdder.add("Alice");
+        listStringAdder.add("Bob");
+        listStringAdder.add("Billy");
+        listStringAdder.add("Cilly");
+        System.out.println(listStringAdder);
+        System.out.println(listStringAdder.getStrList());
+
+        ListAdder lAdder = listStringAdder.add("Jahid");
+        System.out.println(lAdder);
+
+        // Define a new TreeSet
+        TreeSet<Person> newTreeSet = new TreeSet<>();
+        newTreeSet.add(new Person("Jahid", 20));
+        newTreeSet.add(new Person("Alice", 30));
+        newTreeSet.add(new Person("Bob", 10));
+
+        System.out.println(newTreeSet);
+
+        System.out.println("JSON Data Deserialization Example");
+
+
 
 
 

@@ -12,21 +12,40 @@ import java.util.stream.Collectors;
 
 // Goes to Serializer and Deserializer
 @Data
-@AllArgsConstructor
-@NoArgsConstructor  // default constructor
+@NoArgsConstructor
 public class HighScores {
-    private TreeSet<EnrichedWithAll> highScoreSet; // sorted Set; Sorted by Score
-                                    // cant use HashSet or LinkedHashSet are these are not sorted by score
+    // [enriched-with-all]: 3 (Player_ID), EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0)
+    private final TreeSet<EnrichedWithAll> highScoreSet = new TreeSet<>(); // sorted Set; Sorted by Score // Ordered set
+
+    // cant use HashSet or LinkedHashSet are these are not sorted by score
 
     // method to add an enriched record into the sorted TreeSet and keep only the top 3 score records
-    public void add(EnrichedWithAll enrichedRecord){
+    public HighScores add(final EnrichedWithAll enrichedRecord) {
         highScoreSet.add(enrichedRecord);
-        if (highScoreSet.size()>3)
+        /*
+        add 1
+        record [1]
+
+        add 2
+        record [2,1]
+
+        add 0
+        record [2,1,0]
+
+        add 100
+        record [100, 2,1,0] --> remove last (0)
+        record [100,2,1]
+         */
+
+
+        if (highScoreSet.size() > 3)
             highScoreSet.remove(highScoreSet.last());
+        return this; // unconventional adder() method returing this; becoz of the Aggregate function
+        // which requires to add an enrichedRecord to the treeSet
     }
 
     // List all the scored by players
-    public List<EnrichedWithAll> toList(){
+    public List<EnrichedWithAll> toList() {
         return highScoreSet.stream().toList();
     }
 

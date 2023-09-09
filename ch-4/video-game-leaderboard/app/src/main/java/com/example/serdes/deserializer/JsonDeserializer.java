@@ -36,7 +36,8 @@ public class JsonDeserializer<T> implements Deserializer<T> {
 
     // Class Attribute-03
     // reflectionTypeToken - This allows the deserializer to be instantiated without specifying the destination class, which can be useful in some scenarios.
-    private Type reflectionTypeToken; // why this? Type is the common superinterface for all types in the Java programming language. These include raw types, parameterized types, array types, type variables and primitive types.
+    private Type reflectionTypeToken; // why this?  // check example Playground/TypeSim.java
+                        // if no destination class is specified,then capture the Object type from the JSON data provided
 
     // constructor with only destinationClass // not lombok
     // Default Constructor needed by kafka
@@ -53,11 +54,15 @@ public class JsonDeserializer<T> implements Deserializer<T> {
     // method-2/Main method of the Deserializer
     // Deserialize the jsonSata we got in the byte[] array and return an instance of the destination class: Player, Product, ScoreEvent
     // Convert the rawJsonData into a Java Object
+    // T- Generic - Could be either Player, Product, ScoreEvent, or any other type
     @Override
-    public T deserialize(String topic, byte[] jsonData) {
+    public T deserialize(String topic, byte[] jsonData) { // Why 'topic' is here? // topic associated with the jsonData
+        // there could have different deserialization logic based on the topic.
+        // but here we have generalized this for all
         if (jsonData == null) return null;
 
-        Type type = destinationClass!=null? destinationClass: reflectionTypeToken;
-        return gson.fromJson(new String(jsonData, StandardCharsets.UTF_8), type); // gson to convert rawJsonBytes into a Java Object
+        Type type = destinationClass!=null? destinationClass: reflectionTypeToken; // what if destinationClass is not specified?
+        return gson.fromJson(new String(jsonData, StandardCharsets.UTF_8), type);
+                                        // gson to convert rawJsonBytes into a Java Object
     }
 }
