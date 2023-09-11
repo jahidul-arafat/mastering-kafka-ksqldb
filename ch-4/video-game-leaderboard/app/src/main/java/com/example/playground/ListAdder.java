@@ -17,4 +17,5 @@ public class ListAdder {
         strList.add(str);
         return this;
     }
+
 }

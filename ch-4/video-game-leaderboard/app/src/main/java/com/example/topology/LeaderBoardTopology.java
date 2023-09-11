@@ -431,6 +431,8 @@ public class LeaderBoardTopology {
                         Materialized.<String, HighScores, KeyValueStore<Bytes, byte[]>>
                                 as("top3-high-scores-per-game-state-store") // 'state-store' name
                                                     // explicit name of the store for querying outside of the processor topology
+
+                                // customizing the State-store with custom Serdes for Serialization and Deserialization
                                 .withKeySerde(Serdes.String()) // key of Serde at State-Store// for serialization and deserialization of key (product/GameID)
                                 .withValueSerde(JsonSerdes.HighScores() // value of Serde at State-Store// for serialization and deserialization of value (HighScores JavaObject)
                                 )  // once materialized, we will expose this state-store to external word via adhoc queries
@@ -438,19 +440,21 @@ public class LeaderBoardTopology {
                                     // Wrapping would be done using: QueryableStoreTypes.keyValueStore()
                                     // QueryableStoreTypes is a factory class
                 );
-        // stream this aggregated results to topic 'high-scores'
-        top3HighScoresPerGame.toStream().to("high-scores");
 
         // print this aggregated KTable results
         getPrintKTable(top3HighScoresPerGame, "top3-high-scores-per-game");
 
-        // F. Query the State-Store from External Word - this should not be here
+        // F. Using KSource Connector
+        // Writing back data to Kafka Topic
+        // stream this aggregated results to topic 'high-scores'
+        top3HighScoresPerGame.toStream().to("high-scores");
+
+
+        // Implementation - @Main
+        // G. Query the State-Store from External Word - this should not be here
         // this should be outside of Kafka Processor Topology
         // I implemented this in main 'App'
         // Should be exposed through a REST API at port localhost:8080/
-
-
-
 
 
 
@@ -483,8 +487,13 @@ public class LeaderBoardTopology {
                 (key, value, aggregate) -> value,
 
                 // Materialized - specify how the result should be materialized, including Serdes
+                // Means now the groupby setting will be stored in an custom defined State-Store
+                // Note, KTable only store the latest state of any record/event
+                // So, we are not expecting it to give me the a whole list of records, instead the latest record of each Product/GameID
                 Materialized.<String, EnrichedWithAll, KeyValueStore<Bytes, byte[]>>
                                 as("kgrouped-stream-intemidiary-state-store")
+
+                        // for serialization and deserialization of key (product/GameID) and value (HighScores JavaObject)
                         .withKeySerde(Serdes.String())
                         .withValueSerde(JsonSerdes.EnrichedWithAll())
         );

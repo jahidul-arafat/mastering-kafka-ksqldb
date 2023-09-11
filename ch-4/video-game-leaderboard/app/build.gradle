@@ -50,6 +50,19 @@ dependencies {
     implementation 'org.rocksdb:rocksdbjni:8.3.2'   // without
 
 
+    // For Remote Queries
+    // Exposing a readonly state-store to external world using REST API
+    // required for interactive queries (server)
+    implementation 'io.javalin:javalin:3.12.0'
+    // required for interactive queries (client)
+    implementation 'com.squareup.okhttp3:okhttp:4.9.0'
+
+    // logging - Dependency for Remote Queries
+    implementation 'org.slf4j:slf4j-api:1.8.0-beta4'
+    implementation 'org.slf4j:slf4j-simple:1.8.0-beta4'
+    implementation 'ch.qos.logback:logback-classic:1.2.3'
+
+
 }
 
 // for lombok support
@@ -80,7 +93,27 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
-task runGameLeaderboard(type: JavaExec) {
+//task runGameLeaderboard(type: JavaExec) {
+//    main = 'com.example.App'
+//    classpath sourceSets.main.runtimeClasspath
+//}
+
+task runFirst(type: JavaExec) {
     main = 'com.example.App'
     classpath sourceSets.main.runtimeClasspath
+    systemProperties = [
+            'host': 'localhost',
+            'port': '8080',
+            'stateDir': '/tmp/kafka-streams'
+    ]
+}
+
+task runSecond(type: JavaExec) {
+    main = 'com.example.App'
+    classpath sourceSets.main.runtimeClasspath
+    systemProperties = [
+            'host': 'localhost',
+            'port': '8081',
+            'stateDir': '/tmp/kafka-streams2'
+    ]
 }

@@ -4,11 +4,13 @@
 package com.example;
 
 import com.example.model.restful_exposed_models.HighScores;
+import com.example.restful_service.LeaderBoardService;
 import com.example.topology.LeaderBoardTopology;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -21,44 +23,36 @@ public class App {
         System.out.println("Kafka Stateless Video Game Lea Stream Simulation");
         Topology topology = LeaderBoardTopology.build(); // class method ClassName.methodName()
 
+        // we allow the following system properties to be overridden,
+        // which allows us to run multiple instances of our app.
+        // see the `runFirst` and `runSecond` gradle tasks in build.gradle
+        String host = System.getProperty("host");
+        Integer port = Integer.parseInt(System.getProperty("port"));
+        String stateDir = System.getProperty("stateDir");
+        String endpoint = String.format("%s:%s", host, port);
+
         // set the required properties for running Kafka Streams
         Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev1");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
+
+        // Configure an endpoint.
+        config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, endpoint); // localhost:7000
+        config.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         //config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        // build the topology with configuration properties set above
+        // build the topology
+        System.out.println("Starting Videogame Leaderboard");
         KafkaStreams streams = new KafkaStreams(topology, config);
-
-        // Add a shutdown hook to gracefully stop the Kafka Streams application when a global shutdown signal is received.
-        //Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
-
-
-
-        // Start the Streams
-        System.out.println(" Starting Video game Leaderboard");
+        // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
+        Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+        // start streaming!
         streams.start();
 
-        // Put this in a separate class named "LeaderboardService""
-        // Create a queryable read-only copy of the state-store "top3-high-scores-per-game-state-store"
-        // ReadOnlyKeyValueStore<K,V> is an interface
-        // Records/Event in the original state-store
-        /*
-        [top3-high-scores-per-game] -> 6, HighScores(
-            highScoreSet=[
-                EnrichedWithAll(playerId=3, playerName=Isabelle, productId=6, gameName=Mario Kart, score=9000.0),
-                EnrichedWithAll(playerId=2, playerName=Mitch, productId=6, gameName=Mario Kart, score=2500.0),
-                EnrichedWithAll(playerId=4, playerName=Sammy, productId=6, gameName=Mario Kart, score=1200.0)])
-        [top3-high-scores-per-game] -> 1, HighScores(
-            highScoreSet=[
-                EnrichedWithAll(playerId=3, playerName=Isabelle, productId=1, gameName=Super Smash Bros, score=4000.0),
-                EnrichedWithAll(playerId=2, playerName=Mitch, productId=1, gameName=Super Smash Bros, score=2000.0),
-                EnrichedWithAll(playerId=1, playerName=Elyse, productId=1, gameName=Super Smash Bros, score=1000.0)])
-         */
-        ReadOnlyKeyValueStore<String, HighScores> queryableReadOnlyStateStoreForTop3HighScoresPerGameStateStore =
-                streams.store(StoreQueryParameters.fromNameAndType(
-                        "top3-high-scores-per-game-state-store", // state-store name
-                        QueryableStoreTypes.keyValueStore()     // state-store type // multiple state-store types available
-                ));
+        // start the REST service
+        HostInfo hostInfo = new HostInfo(host, port);
+        LeaderBoardService service = new LeaderBoardService(hostInfo, streams);
+        service.start();
     }
 }
