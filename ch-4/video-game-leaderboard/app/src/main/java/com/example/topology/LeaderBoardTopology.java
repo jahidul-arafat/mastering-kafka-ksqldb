@@ -83,7 +83,7 @@ public class LeaderBoardTopology {
 //                        ));
 //        getPrintStream(scoreEventSource, "score-events"); // STREAM PROCESSOR to print only | (Test Only)
 
-        // Rekeying to make is compatible for join operation witn KTable 'players'
+        // Rekeying to make is compatible for join operation with KTable 'players'
         KStream<String, ScoreEvent> scoreEventSource = topologyStreamBuilder
                 .stream(
                         "score-events",
