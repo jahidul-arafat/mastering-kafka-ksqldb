@@ -1,5 +1,13 @@
 # Kata Kafka Playbook
 ```bash
+# Create a new Java Project for Kafka
+gradle init \
+ --type java-application \
+ --dsl groovy \
+ --test-framework junit-jupiter \
+ --project-name my-project \
+ --package com.example
+
 # Exec into the Kafka Broker - there is only one Broker in our kafka cluster named 'kafka'
 # make sure you are in the same directory residing the docker-compose file
 docker-compose exec kafka bash # this is let you in the kafka Broker
