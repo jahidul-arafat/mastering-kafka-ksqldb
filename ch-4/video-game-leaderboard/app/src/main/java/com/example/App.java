@@ -33,8 +33,8 @@ public class App {
 
         // set the required properties for running Kafka Streams
         Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev1");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev1"); // this is application.id
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092"); // the kafka broker
 
         // Configure an endpoint.
         config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);

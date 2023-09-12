@@ -1,6 +1,7 @@
 package com.example.restful_service;
 
 import com.example.model.restful_exposed_models.HighScores;
+import com.example.model.stateful_join_models.EnrichedWithAll;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import lombok.AllArgsConstructor;
@@ -13,16 +14,16 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.StoreQueryParameters;
-import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.*;
 
-import org.apache.kafka.streams.state.StreamsMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Data
 @AllArgsConstructor // dont use NoArgsConstructor as the Instance Attributes are defined to be 'final' and must be initialized
@@ -82,13 +83,26 @@ public class LeaderBoardService {
         // mapping the URL path /leaderboard/:key to a GET request method getKey()
         // to show the high-score of a given Poduct/GameID_Key
         // We will use Point lookup to retrieve a single value from our read-only state-store
+        // http://localhost:8080/leaderboard/6
         app.get("/leaderboard/:key", this::getKey); // :key -> means its an URL parameter i.e. 1
 
         /** Local key-value store query: approximate number of entries */
+        // http://localhost:8080/leaderboard/count/all
         app.get("/leaderboard/count/all", this::getCountAllFromLocalRemote);
 
         /** Local key-value store query: approximate number of entries */
+        // http://localhost:8080/leaderboard/count/local
         app.get("/leaderboard/count/local", this::getCountOnlyLocal);
+
+        /** Local key-value store query: all entries */
+        // http://localhost:8080/leaderboard
+        app.get("/leaderboard", this::getAll);
+
+        /** Local key-value store query: range scan (inclusive) */
+        // http://localhost:8080/leaderboard/1/10
+        app.get("/leaderboard/:from/:to", this::getRange); // Java method reference
+                                                    // reference to the 'getRange' mthod of the current object of 'LeaderBoardService' class
+
 
     }
 
@@ -107,7 +121,7 @@ public class LeaderBoardService {
         - State can move around whenever there is a consumer rebalance
         - if so, then we may not be able to retrive the requested value
      */
-    void getKey(Context ctx) { // Context - Javaline Context which will show us the result as JSON
+    public void getKey(Context ctx) { // Context - Javaline Context which will show us the result as JSON
         // Use a point lookup to retrieve a single value from our read-only state-store
         String productId = ctx.pathParam("key"); // key- Product/GameId - 1, 6
 
@@ -187,7 +201,7 @@ public class LeaderBoardService {
     /** Local key-value store query: approximate number of entries */
     // How Designed: app.get("/leaderboard/count/local", this::getCountLocal);
     // Get the count from both the local-instance and the remote-instance
-    void getCountAllFromLocalRemote(Context ctx) { // Context - Javaline Context which will show us the result as
+    public void getCountAllFromLocalRemote(Context ctx) { // Context - Javaline Context which will show us the result as
         // get the record counts from the local-instance
         // current one
         long count = getReadOnlyStateStore().approximateNumEntries(); //get approximate number of entries of the read-only state-store
@@ -199,8 +213,9 @@ public class LeaderBoardService {
         for (StreamsMetadata metadata:
                 streams.allMetadataForStore("top3-high-scores-per-game-state-store")) {
 
-            // as localhost records are already in the count, excape those to recount
-            if (!hostInfo.equals(metadata.hostInfo())){ // !localhost.equals(localhost)
+            // as localhost records are already in the count, escape those to recount
+            // to bypass local instance to avoid recounting and only count the records from remote-instance
+            if (!hostInfo.equals(metadata.hostInfo())){ // !localhost.equals(localhost)= !True = False
                 log.info("bypassing local store count");
                 continue;
             }
@@ -212,7 +227,7 @@ public class LeaderBoardService {
         ctx.json(count);
     }
 
-    void getCountOnlyLocal(Context ctx) { // Context - Javaline Context which will show us the result as
+    public void getCountOnlyLocal(Context ctx) { // Context - Javaline Context which will show us the result as
         log.info("Getting count from the Local store only");
         long count = 0L;
         try {
@@ -223,14 +238,15 @@ public class LeaderBoardService {
             // log error
             log.error("Could not get leaderboard count", e);
         } finally { // finally block will always execute
-            ctx.result(String.valueOf(count));
+            //ctx.result(String.valueOf(count));
+            ctx.json(count);
             log.info("(local) Approximate number of entries: {}", count);
         }
     }
 
     // For getCountAllLocalRemote()
     // Build the remote call request URL to fetch the records in remote-instance
-    long fetchCountFromRemoteInstance(String host, int port) {
+    private long fetchCountFromRemoteInstance(String host, int port) {
         log.info("Getting count from the remote store");
         OkHttpClient client = new OkHttpClient(); // creating the REST Client using OkHttpClient
 
@@ -246,4 +262,90 @@ public class LeaderBoardService {
             return 0L;
         }
     }
+
+    // method to get all the records
+    /*
+    i.e. in From the ReadOnlyStateStore of 'top3-high-scores-per-game-state-store' we get
+    1(GameID)-> [Score_100, Score_50, Score_20]
+    2(GameID)-> [Score_200, Score_150, Score_70]
+
+    Expected result/ A List:
+    [Score_100, Score_50, Score_20, Score_200, Score_150, Score_70] // order is not guaranteed
+     */
+    public void getAll(Context ctx) { // Context - Javaline/JVM Context which will show us the result as
+        log.info("[getAll] Getting all records from the ReadOnlyKeyStore 'top3-high-scores-per-game-state-store'");
+
+        // Define a HashMap as a placeholder for KeyValueIterator 'range'.all
+        Map<String,List<EnrichedWithAll>> leaderboardMap = new HashMap<>();
+
+        // Returns:
+        //An iterator of all key/value pairs in the store, from smallest to largest bytes.
+        // Order is not guaranteed
+        // HighScores are storing the EnrichedWithAll object in a TreeSet
+        // i.e. [From the HighScores class] private final TreeSet<EnrichedWithAll> highScoreSet = new TreeSet<>();
+        KeyValueIterator<String,HighScores> rangeIteratorFromReadOnlyKeyValueStore = getReadOnlyStateStore().all();
+        int keyCounter=0;
+        int valueCounter=0;
+
+        // iterate over each record
+        // each record has a Key and a List of Values
+        while (rangeIteratorFromReadOnlyKeyValueStore.hasNext()) {
+            var nextRecord = rangeIteratorFromReadOnlyKeyValueStore.next(); // First point to Key_GameID_1, then next to Key_GameID_2
+            String gameId = nextRecord.key;
+            HighScores top3ScoreRecordTreeSet = nextRecord.value; // these are EnrichedWithAll values in the HighScores object
+            List<EnrichedWithAll> top3ScoreRecordList = top3ScoreRecordTreeSet.toList(); //
+            leaderboardMap.put(gameId, top3ScoreRecordList);
+            log.info("[getAll] Fetching the EnrichedWithAll {} records for GameID {}", top3ScoreRecordList.size(),gameId);
+
+            keyCounter++;
+            valueCounter+=top3ScoreRecordList.size();
+        }
+        rangeIteratorFromReadOnlyKeyValueStore.close(); // must have to close to avoid memory leak
+        log.info("[getAll] Closing the rangeIterator to avoid memory leak. " +
+                "Total Read-> Key {}, Value {}",keyCounter,valueCounter);
+
+        // covert the map into JSON for the Javaline/JVM Context
+        ctx.json(leaderboardMap);
+
+    }
+
+    /** Local key-value store query: range scan (inclusive) */
+    //app.get("/leaderboard/:from/:to", this::getRange);
+    // http://localhost:8080/leaderboard/1/6 - inclusive range
+    public void getRange(Context ctx) { // Context - Javaline/JVM Context which will show us
+        log.info("[getRange] Getting all records from the ReadOnlyKeyStore 'top3-high-scores-per-game-state-store'");
+        // from the URL path, get the 'from' and 'to' pathParameters
+        String from = ctx.pathParam("from");
+        String to = ctx.pathParam("to"); // inclusive
+
+        // Get the Iterator data from the ReadOnlyKeyStore 'top3-high-scores-per-game-state-store'
+        // String_Key_1: Value_HighScoresObject
+        KeyValueIterator<String,HighScores> rangeIteratorFromReadOnlyKeyValueStore =
+                getReadOnlyStateStore().range(from, to);
+        int keyCounter=0;
+        int valueCounter=0;
+
+        // define a HashMap as a placeholder for the Iterator data
+        // Note- the iterator value 'HighScores' has toList() method to get all the EnrichedWithAll objects
+        Map<String,List<EnrichedWithAll>> leaderboardMap = new HashMap<>();
+
+        // loop through the Iterator
+        while (rangeIteratorFromReadOnlyKeyValueStore.hasNext()) {
+            var nextRecord = rangeIteratorFromReadOnlyKeyValueStore.next(); // First point to Key_GameID_1, then next to Key_GameID_2
+            String gameId = nextRecord.key;
+            HighScores top3ScoreRecordTreeSet = nextRecord.value; // these are EnrichedWithAll values in the HighScores object
+            List<EnrichedWithAll> top3ScoreRecordList = top3ScoreRecordTreeSet.toList(); //
+            leaderboardMap.put(gameId, top3ScoreRecordList);
+            log.info("[getRange] Fetching the EnrichedWithAll {} records for GameID {}", top3ScoreRecordList.size(),gameId);
+        }
+
+        rangeIteratorFromReadOnlyKeyValueStore.close(); // must have to close to avoid memory leak
+        log.info("[getRange] Closing the rangeIterator to avoid memory leak. " +
+                "Total Read-> Key {}, Value {}",keyCounter,valueCounter);
+
+        // covert the map into JSON for the Javaline/JVM Context
+        ctx.json(leaderboardMap);
+    }
+
+
 }
