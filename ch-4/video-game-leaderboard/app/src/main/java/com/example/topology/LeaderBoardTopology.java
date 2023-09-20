@@ -357,7 +357,7 @@ public class LeaderBoardTopology {
                                                                         // new Key of Byte Stream converted to String
                         // group by productId // rekey //repartition // network call
                         Grouped.with( // for serialization and deserialization keys and values after grouping with new key ProductID
-                                Serdes.String(), // to convert the byte stream Key_ProductID into a String
+                                Serdes.String(), // to convert the JSON byte stream Key_ProductID into a String
                                 JsonSerdes.EnrichedWithAll()) // value // group with JsonSerdes.EnrichedWithAll() for serialization and deserialization
                 );
 
