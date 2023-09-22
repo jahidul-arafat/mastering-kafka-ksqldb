@@ -3,6 +3,7 @@
  */
 package com.example;
 
+import com.example.restful_services.PatientMonitoringService;
 import com.example.topology.PatientMonitoringTopology;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KafkaStreams;
@@ -46,7 +47,7 @@ public class App {
 //                StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
 
 
-        // build the topology
+        // --------------- build the topology and Start Streaming -----------------
         System.out.println("Starting Patient Monitoring System");
         KafkaStreams streams = new KafkaStreams(topology, props);
         // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
@@ -60,10 +61,10 @@ public class App {
         // start streaming!
         streams.start();
 
-        // start the REST service
-        //HostInfo hostInfo = new HostInfo(host, port);
-        //LeaderBoardService service = new LeaderBoardService(hostInfo, streams);
-        //service.start();
+        // ------------------ start the REST service --------------------------------
+        HostInfo hostInfo = new HostInfo(host, port);
+        PatientMonitoringService service = new PatientMonitoringService(hostInfo, streams);
+        service.start();
 
     }
 }

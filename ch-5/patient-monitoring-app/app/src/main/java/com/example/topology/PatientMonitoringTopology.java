@@ -184,7 +184,7 @@ public class PatientMonitoringTopology {
         //      unbound_Stream:: as keyspace is limited:: less number of patients +
         //      shutdown_application_if_buffer_full/ No early emit)
 
-        // expected output: [pulse-counts]: [1@1606122120000/1606122180000], 120 // means in 60s duration we got 120 pulse-events
+        // expected output: [pulse-counts]: [1_PatientID@1606122120000_lowerBoudnary/1606122180000_upperBoundary], 120_pulseCounts // means in 60s duration we got 120 pulse-events
         // discard any windos less than 60s
         KTable<Windowed<String>, Long> pulseCounts_aggregated =
                 pulseEventsSource
@@ -383,6 +383,7 @@ public class PatientMonitoringTopology {
 
         // E4: Perform the actual join between KStreams 'high-pulse-count' and 'high-bodytemp object'
         // KStream<key_PatientID, value_CombinedVitals>
+        // Expected Output: [vitals-after-join]: 1, CombinedVitals(heartRate=120, bodyTemp=BodyTemp(timestamp=2020-11-23T09:03:06.500Z, temperature=101.2, unit=F))
         KStream<String,CombinedVitals> vitalsJoined = highPulse_filtered_rekeyed
                 .join(
                         highBodyTemp_filtered, // join with 'filtered high-body-temp'
@@ -392,6 +393,23 @@ public class PatientMonitoringTopology {
                 );
         // [Debug only] Print the new KStream after the vitals are joined
         getPrintStream(vitalsJoined, "vitals-after-join");
+
+        // ---------------- F: Write (PRODUCE) the enriched CombinedVital data back to Kafka Sink Stream --------------
+        // Why: To make our joinedData 'vitalsJoined' available to downstream consumer
+        // We have to write the data back to kafka stream SINK 'alerts'
+        // ** The SINK 'alert' topic will pnly be written whenerver our application determines that a patients is at risk for SIRS deseases
+
+        // F1. Write back the data to topic 'alerts'// SINK
+        // Which data will be written back?
+        // // Expected Output: [vitals-after-join]: 1_patientID_Key_String, Value_CombinedVitals(heartRate=120_Long, bodyTemp_Object=BodyTemp(timestamp=2020-11-23T09:03:06.500Z, temperature=101.2, unit=F))
+        vitalsJoined.to(
+                "alerts",
+                Produced.with(
+                        Serdes.String(), // Kafka is a byte-in and byte-out stream.
+                                        // So we need to define how the raw joined data will be deserailzied and deserailized in the Kafka topic 'alerts'
+                        JsonSerdes.CombinedVitals()
+                )
+        );
 
 
         // Return the topology to App.main()
