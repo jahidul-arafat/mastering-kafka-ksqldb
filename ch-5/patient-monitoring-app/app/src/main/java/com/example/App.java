@@ -3,19 +3,23 @@
  */
 package com.example;
 
+import com.example.rebalancing.CustomStateRestoreListener;
 import com.example.restful_services.PatientMonitoringService;
 import com.example.topology.PatientMonitoringTopology;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.metrics.Stat;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.streams.state.HostInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
 public class App {
-
+    private static final Logger log = LoggerFactory.getLogger(App.class);
 
     public static void main(String[] args) {
         System.out.println("Kafka Windowed TimeStream Analysis");
@@ -40,6 +44,10 @@ public class App {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // not reading the earliest events in a topic-partition // only read the latest
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, endpoint);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+        // is your state-store showing undesired old data? if Yes-> setup the below configuration
+        //props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE); // To enable the purgeable state store feature
+                                                                                        // This guarantees that the state stores will be consistently purged.
         // an example of setting the timestamp extractor using a streams config
         // note that we override this in our topology implementation, this is
         // just here for demonstration purposes
@@ -50,6 +58,27 @@ public class App {
         // --------------- build the topology and Start Streaming -----------------
         System.out.println("Starting Patient Monitoring System");
         KafkaStreams streams = new KafkaStreams(topology, props);
+
+        // How to improve the visibility of Kafka Stream Applicaiton
+        // how to listen to rebalance triggers in our Kafka Streams application
+        // Approach-01/ State Listener: To monitor Kafka Stream applications state
+        // i.e. when a rebanacing is tiggered which is impctful for Stateful applicaitons
+        // Example: @MailChimp, they has a speical matrix that gets incremented when a Rebalancing is triggered and they connect that to Promethues
+        // Kafka Stream Applicaiton States:
+        // (a) Created -> Not Running
+        // (b)Created -> Running -> Error-> Pending Shutdown-> Not Running
+        // (c)Created -> Running -> Reblancing -> Pending Shutdown -> Not Running
+        streams.setStateListener(
+                (oldState, newState) ->{
+                    if (newState.equals(KafkaStreams.State.REBALANCING)){
+                        log.info("Rebalancing due to application state changes");
+                    }
+                }
+        );
+
+        // Approach-02/ State restore listener example
+        streams.setGlobalStateRestoreListener(new CustomStateRestoreListener());
+
         // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 

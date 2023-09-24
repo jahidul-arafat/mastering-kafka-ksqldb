@@ -22,8 +22,8 @@ public class BodyTempEventGeneratorOptimized {
              BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
 
             // Generate patient data records for patients with IDs 1 to 10000
-            for (int patientId = 1; patientId <= 100; patientId++) {
-                for (int i = 0; i < 50000; i++) {
+            for (int patientId = 1; patientId <= 3; patientId++) {
+                for (int i = 0; i < 200; i++) {
                     long timestampMillis = startTimestamp.getTime() + (i * 500);
                     Date timestamp = new Date(timestampMillis);
 

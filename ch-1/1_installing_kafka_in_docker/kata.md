@@ -35,6 +35,22 @@ Topic: users    PartitionCount: 4       ReplicationFactor: 1    Configs:
         Topic: users    Partition: 1    Leader: 1       Replicas: 1     Isr: 1
         Topic: users    Partition: 2    Leader: 1       Replicas: 1     Isr: 1
         Topic: users    Partition: 3    Leader: 1       Replicas: 1     Isr: 1
+        
+# Describe a topic config
+kafka-topics \
+  --bootstrap-server localhost:9092 \
+  --topic topic_name \
+  --describe
+
+# Alter the topic configuration of an existing changelog
+kafka-configs \ 1
+  --bootstrap-server localhost:9092 \
+  --entity-type topics \
+  --entity-name dev-consumer-pulse-counts-changelog \
+  --alter \
+  --add-config min.insync.replicas=1
+
+
 
 # Produce some data for the given topic using Kafka-console-producer
 kafka-console-producer \ 
@@ -87,5 +103,8 @@ kafka-console-consumer \
 #CreateTime:1693454582027        4        cilly
 #CreateTime:1693454575963        2        ailly
 #CreateTime:1693454935796        11       eleven
+
+# to delete a state-store or topic
+kafka-topics --bootstrap-server localhost:9092 --delete --topic topic_or_ss-name
 
 ```

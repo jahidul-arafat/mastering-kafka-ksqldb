@@ -22,13 +22,12 @@ public class PulseEventGeneratorOptimized {
              BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
 
             // Generate pulse records for patients with IDs 1 to 10000
-            for (int patientId = 1; patientId <= 110; patientId++) {
-                for (int i = 0; i < 50000; i++) {
+            for (int patientId = 1; patientId <= 3; patientId++) {
+                for (int i = 0; i < 200; i++) {
                     long timestampMillis = startTimestamp.getTime() + (i * 500);
                     Date timestamp = new Date(timestampMillis);
 
                     JSONObject record = new JSONObject();
-                    record.put("patientID", patientId);
                     record.put("timestamp", dateFormat.format(timestamp));
 
                     // Write the record to the file

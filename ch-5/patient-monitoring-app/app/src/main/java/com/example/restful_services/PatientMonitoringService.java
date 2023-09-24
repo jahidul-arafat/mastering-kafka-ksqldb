@@ -10,6 +10,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,7 +71,7 @@ public class PatientMonitoringService {
     public ReadOnlyKeyValueStore<String, CombinedVitals> getAlertsStore() {
         return streams.store(
                 StoreQueryParameters.fromNameAndType(
-                        "alerts",
+                        "ss-alerts",
                         QueryableStoreTypes.keyValueStore()
                 )
         );
@@ -91,8 +92,15 @@ public class PatientMonitoringService {
         app.get("/bpm/all", this::getAllWindowedBpmCountForAllPatients_for_all_timeframe);
 
         // GET http://localhost:8080/bpm/:from/:to
-        // GET http://localhost:8080/bpm/2020-11-12T09:02:00.00Z/2020-11-12T09:03:00Z
+        // GET http://localhost:8080/bpm/range/1606122120000/1606122180000
         app.get("/bpm/range/:from/:to", this::getAllWindowedBpmForAllPatients_filter_by_timeframe);
+
+        // GET http://localhost:8080/bpm/range/:from/:to
+        // GET http://localhost:8080/bpm/range/1/1606122120000/1606122180000
+        app.get("/bpm/range/:key/:from/:to", this::getAllWindowedBpmForAPatient_filtered_by_timerange);
+
+        // GET http://localhost:8080/bpm/alerts/all
+        app.get("/bpm/alerts/all", this::getAllAlerts);
 
     }
 
@@ -207,9 +215,91 @@ public class PatientMonitoringService {
 
         // return a JSON representation
         ctx.json(bpmList);
-
-
     }
+
+    // 3. GET http://localhost:8080/bpm/range/:key/:from/:to
+    // Example: http://localhost:8080/bpm/range/1/1606122120000/1606122180000
+    // Windowed_multidimensional_KEY_[1_PatientID@1606122120000_lowerBoudnary/1606122180000_upperBoundary], Value_120_pulseCounts
+    // Expected Output
+    public void getAllWindowedBpmForAPatient_filtered_by_timerange(Context ctx){
+        // Create a bpmList to add all the bpmCounts at the speific time for a patient
+        List<Map<String,Object>> bpmList = new ArrayList<>();
+
+        // fet the path parameter {key, from, to}
+        String patientId = ctx.pathParam("key"); // 1
+        String fromMillis= ctx.pathParam("from"); // 1606122120000
+        String toMillis = ctx.pathParam("to"); // 1606122180000
+
+        // Convert the time range from milliseconds to timeformat instances
+        Instant fromTime = Instant.ofEpochMilli(Long.valueOf(fromMillis)); // 2020-11-12T09:02:00.00Z
+        Instant toTime = Instant.ofEpochMilli(Long.valueOf(toMillis));
+
+        // using the time range, fetch the events/records from the readonly state store
+        // Define an iterator to iterate over the events fetched from the state store
+        // ** we dont need a key value iterator like the earlier example. Key is already shared in pathParam
+        // We just need a WindowStoreIterator of values, where Value is totalPulseCount in Long format
+        WindowStoreIterator<Long> rangeIterator = getBpmStore().fetch(patientId,fromTime,toTime);
+        while (rangeIterator.hasNext()){
+            // create a temp placeholder
+            Map<String, Object> bpmPlaceholder = new HashMap<>();
+
+            // get the next record
+            KeyValue<Long,Long> next = rangeIterator.next(); // KeyValue<StartTime, BpmCounr>
+            Long timestamp = next.key; //1606122120000
+            Long bpmCount = next.value; // 120
+
+            // add this into the bpmPlaeholder
+            bpmPlaceholder.put("timestamp", Instant.ofEpochMilli(timestamp).toString());
+            bpmPlaceholder.put("bpmCount",bpmCount);
+            bpmList.add(bpmPlaceholder);
+        }
+
+        // close the rangeIterator to avoid memory leaks
+        rangeIterator.close();
+
+        // return the JSON reponse
+        ctx.json(bpmList);
+    }
+
+    // 4. GET http://localhost:8080/bpm/alerts/all
+    // Records in TOPIC 'alerts' is key_valued // Not windowed
+    // Record/Example -> 1_patientID_Key_String, Value_CombinedVitals(heartRate=120_Long, bodyTemp_Object=BodyTemp(timestamp=2020-11-23T09:03:06.500Z, temperature=101.2, unit=F))
+    public void getAllAlerts(Context ctx){
+        // Define a central altersList to list all the bpm alerts of all users
+        List<Map<String, CombinedVitals>> alertsList = new ArrayList<>();
+
+        // Define the KeyValueIterator to get all the alerts
+        KeyValueIterator<String,CombinedVitals> alertIterator= getAlertsStore().all();
+        while (alertIterator.hasNext()){
+            // define a alertPlaceholder HashMap
+            Map<String,CombinedVitals> alertPlaceholder = new HashMap<>();
+
+            // get the item
+            KeyValue<String,CombinedVitals> next = alertIterator.next();
+
+            // get the patientID
+            String patientId = next.key;
+            // get the combined vitals
+            CombinedVitals combinedVitals = next.value;
+            // put into the bpmPlaceholder
+            alertPlaceholder.put(patientId,combinedVitals);
+            alertsList.add(alertPlaceholder);
+        }
+
+        // close the iterator to avoid memory leaks
+        alertIterator.close();
+
+        // return a JSON response
+        ctx.json(alertsList);
+    }
+
+    // 5. GET http://localhost:8080/bpm/alerts/:key
+    // Example: GET http://localhost:8080/bpm/alerts/1
+    // Get all the BPM alert records of a specific patient
+
+
+    // 6. GET http://localhost:8080/bpm/alerts/:key/:from/:to
+    // Get all BPM alert records of a specific patient in a time range
 
 
 

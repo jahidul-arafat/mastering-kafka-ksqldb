@@ -7,15 +7,22 @@ import com.example.models.VitalTimestampExtractor;
 import com.example.serdes.wrapper.JsonSerdes;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.eclipse.jetty.util.Callback.combine;
 
 public class PatientMonitoringTopology {
     private static final Logger log = LoggerFactory.getLogger(PatientMonitoringTopology.class);
@@ -190,7 +197,14 @@ public class PatientMonitoringTopology {
                 pulseEventsSource
                         .groupByKey()// groupby patientID
                         .windowedBy(tumblingWindow) // convert KStream into KTable // creates new multi-dimentional key: oldKey_1-> [<oldKey>@<window_start_ms>/<window_end_ms>]
-                        .count(Materialized.as("ss-pulse-counts")) // store the aggregated result in state-store
+                        .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>
+                                as("ss-pulse-counts")
+                                .withRetention(Duration.ofMinutes(10)) // To minimize the effects of rebalancing and speedup recovery period from the changelog topics
+                                                                        // Materialize a windowed store with a retention period of 10 minutes
+                                                                        // retention period must be larger than the window size
+                                                                        // retention period 10 min > window size (60s) + grace period (5s)
+                                                                        // Default window retention period is : 1 Day
+                        ) // store the aggregated result in state-store
                         .suppress( // suppressed to avoid intermediary emits as seen in earlier solution
                                 Suppressed.untilWindowCloses(
                                         Suppressed.BufferConfig.unbounded().shutDownWhenFull()
@@ -390,9 +404,93 @@ public class PatientMonitoringTopology {
                         setting_valueJoiner_For_filtered_Pulse_and_BodyTemp, // to create a new object after join
                         setting_joinWindows_For_filtered_Pulse_and_BodyTemp, // window size with grace_period (how long to wait for delayed events/records)
                         setting_joinParams_For_filtered_Pulse_and_BodyTemp // serializer and deserializer serdes
+
                 );
         // [Debug only] Print the new KStream after the vitals are joined
         getPrintStream(vitalsJoined, "vitals-after-join");
+
+        // E5. Convert the KStream vitalsJoined into a KTable to store it into a materialzied state-store.
+
+        // Strategy: Define state-store rebalancing approaches to fast restore
+        /*
+        4 Ways for active clean up of state-stores
+        - way-1/Tombstone (delete marker), patient has checkedout, remove the entity from state-store
+        - way-2/Window Retention: Set the retention timebound for the Materialized state-store of changelogs
+        - way-3/Aggressive topic compaction - segment level topic configuration to handle ditry uncompacted change logs
+        - way-4/ LRUC Cache @Memory
+         */
+        // E5.1 Reduce the rebalacing impact with WindowRetention Period set to 10 min for fast recovery
+//        KTable<String, CombinedVitals> vitalsTable = vitalsJoined.toTable(
+//                Materialized.<String, CombinedVitals, KeyValueStore<Bytes, byte[]>>
+//                                as("ss-alerts")
+//                        .withRetention(Duration.ofMinutes(10))  // to minimize the effect of rebalancing + for fast recovery
+//                        .withKeySerde(Serdes.String())
+//                        .withValueSerde(JsonSerdes.CombinedVitals()));
+
+        // E5.2 Aggressive topic compaction
+        /*
+        A glimps of Topics
+        - Kafka topics are splitted across partitions i.e. topicID_partitionID 0_0 0_1 0_2 0_3
+        - at the lowest level of abstraction, its 'segments' where active topics are written
+        - if a segment storage threshold is reached, it becomes inactive and becomes eligible for cleaning
+        - Reduce segment size
+        - By default changelog topics are compacted, only the latest value if each Record key is retained
+         */
+        // using topic configuration set to
+        // Reduce the segment size t be 512MB
+        // Reduce the minimum cleanable dirty(uncompacted data hold by Kafka topic) ratio: 30%
+        // This configuration controls how frequently the log compactor will attempt to clean the log (assuming log compaction is enabled).
+        Map<String, String> topicConfigs = new HashMap<>();
+        topicConfigs.put("segment.bytes", "536870912");
+        topicConfigs.put("min.cleanable.dirty.ratio", "0.3"); // how frequency log compactor attempt to clean the logs
+                                                            // higher is better-> higher is more clean -> more waste of storage
+                                                            // min 30% of the uncompacted changelog will be cleaned, cloud be high
+        // Looking for a way to control the writes to state-store changelogs and downstream processors (i.e. to anotehr STREAM processor)
+        // Note: A larger cache size and higher commit interval can help deduplicate consecutive updates to the same key.
+        // Here, I will set the cache size to 10MB and commit interval to 30s
+        // why this: to reduce the duplicating updates of the same key
+        /*
+        Tradeoffs of higher cache
+        - Higher memory usage
+        - Higher latency (records are emitted less frequently)
+         */
+        topicConfigs.put("cache.max.bytes.buffering", "1048576"); // max 10M of memory for buffer across all threads, not to a single thread
+                                                                // means, if you have 5 threads, then 10M will be divided equally to all thread . 2MB each to thread
+                                                                // thread that is dealign with HOT-PARTITION, will flush its 2MB cache more frequently than others
+                                                                // However, regardless of these, the final stateful computation will be the same.
+        topicConfigs.put("commit.interval.ms", "30000"); // commit interval to write to state-store
+                                                        // Tradeoff of Higher interval.- Less emit to downstream processor or state-store
+                                                        // if a task is failed and need to be redone, has to wait more than before
+
+        KTable<String, CombinedVitals> vitalsTable = vitalsJoined.toTable(
+                Materialized.<String, CombinedVitals, KeyValueStore<Bytes, byte[]>>
+                                as("ss-alerts")
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(JsonSerdes.CombinedVitals())
+                        .withLoggingEnabled(topicConfigs) // must have to enable this
+        );
+
+//        // Group the KStream by key // temporary placeholder
+//        KGroupedStream<String, CombinedVitals> groupedStream = vitalsJoined
+//                .groupByKey(Grouped.with(
+//                        Serdes.String(),
+//                        JsonSerdes.CombinedVitals()));
+//
+//
+//
+//        // Define an aggregation function (you can customize this)
+//        // Here, we'll simply take the latest value for each key
+//        KTable<String, CombinedVitals> vitalsTable = groupedStream
+//                .reduce(
+//                    (currentValue, newValue) -> newValue,
+//                    Materialized.<String, CombinedVitals, KeyValueStore<Bytes, byte[]>>as("ss-alerts")
+//                        .withKeySerde(Serdes.String())
+//                        .withValueSerde(JsonSerdes.CombinedVitals())
+//        );
+
+        // [Debug Only] Print the KTable
+        getPrintKTable(vitalsTable, "ss-alerts");
+
 
         // ---------------- F: Write (PRODUCE) the enriched CombinedVital data back to Kafka Sink Stream --------------
         // Why: To make our joinedData 'vitalsJoined' available to downstream consumer
@@ -422,5 +520,11 @@ public class PatientMonitoringTopology {
     // V-> Tweet/EntitySentiment
     private static <K, V> void getPrintStream(KStream<K, V> kStream, String label) {
         kStream.print(Printed.<K, V>toSysOut().withLabel(label));
+    }
+
+    // method to print a kTable
+    private static <K, V> void getPrintKTable(KTable<K, V> kTable, String label) {
+        kTable.toStream()
+                .foreach((k, v) -> System.out.printf("[%s] -> %s, %s\n",label, k, v));
     }
 }
