@@ -39,7 +39,7 @@ Topic: users    PartitionCount: 4       ReplicationFactor: 1    Configs:
 # Describe a topic config
 kafka-topics \
   --bootstrap-server localhost:9092 \
-  --topic topic_name \
+  --topic topic-name \
   --describe
 
 # Alter the topic configuration of an existing changelog

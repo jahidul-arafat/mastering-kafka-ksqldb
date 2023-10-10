@@ -378,8 +378,8 @@ public class PatientMonitoringTopology {
         // StreamJoined for KStream-KStream join; Joined for KStream-KTable join
         StreamJoined<String, Long,BodyTemp> setting_joinParams_For_filtered_Pulse_and_BodyTemp = StreamJoined.with(
                 Serdes.String(), // Key- PatientID // indicates key in both KStream expected to be deserialized as String
-                Serdes.Long(), //
-                JsonSerdes.BodyTemp()
+                Serdes.Long(), // pulse count
+                JsonSerdes.BodyTemp() // BodyTemp object
         );
 
         // E2. Setting_02: Define Sliding Join Windows
@@ -454,11 +454,11 @@ public class PatientMonitoringTopology {
         - Higher memory usage
         - Higher latency (records are emitted less frequently)
          */
-        topicConfigs.put("cache.max.bytes.buffering", "1048576"); // max 10M of memory for buffer across all threads, not to a single thread
+        //topicConfigs.put("cache.max.bytes.buffering", "1048576"); // max 10M of memory for buffer across all threads, not to a single thread
                                                                 // means, if you have 5 threads, then 10M will be divided equally to all thread . 2MB each to thread
                                                                 // thread that is dealign with HOT-PARTITION, will flush its 2MB cache more frequently than others
                                                                 // However, regardless of these, the final stateful computation will be the same.
-        topicConfigs.put("commit.interval.ms", "30000"); // commit interval to write to state-store
+        //topicConfigs.put("commit.interval.ms", "30000"); // commit interval to write to state-store
                                                         // Tradeoff of Higher interval.- Less emit to downstream processor or state-store
                                                         // if a task is failed and need to be redone, has to wait more than before
 
