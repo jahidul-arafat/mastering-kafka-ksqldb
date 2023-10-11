@@ -4,9 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// For Step-1: Consuming source event streams at "reported-state-event" topic
-// Target Event Stream/DataSet: reported-state-events.json
-// 1|{"timestamp": "2020-11-23T09:02:00.000Z", "wind_speed_mph": 40, "power": "ON", "type": "REPORTED"}
+// For Step-1: Data Model-01
+// Target Event Stream/DataSet: reported-state-events.json, desired-state-events.json
+// reported-state-event: 1|{"timestamp": "2020-11-23T09:02:00.000Z", "wind_speed_mph": 40, "power": "ON", "type": "REPORTED"}
+// desired-state-event: 1|{"timestamp": "2020-11-23T09:12:00.000Z", "power": "ON", "type": "DESIRED"}
 @Data // getter, setter and toString
 @AllArgsConstructor // default constructor
 public class TurbineState {

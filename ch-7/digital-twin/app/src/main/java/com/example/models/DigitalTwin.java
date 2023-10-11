@@ -4,7 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// For 3.1
+// Data Model-02: Digital Twin
+// To combine both reported-state-events.json and desired-state-events.json records into a DigitalTwin record
 /*
 - Each digital twin record will be written to an output topic called digital-twins for analytical purposes.
 - In this step, you will learn how to crate athe DigitalTwin object that would be used for Deserlization
