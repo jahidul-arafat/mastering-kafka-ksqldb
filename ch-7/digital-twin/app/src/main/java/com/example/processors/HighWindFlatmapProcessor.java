@@ -33,6 +33,7 @@ For that
       Forward the modified record to all downstream processors
 -
  */
+// Tag: its a stateless processor
 public class HighWindFlatmapProcessor // this is a Stateless STREAM processor created for ProcessorAppTopology
     implements Processor<String, TurbineState, String, TurbineState> { // implements the Processor interface, not functional interface
 

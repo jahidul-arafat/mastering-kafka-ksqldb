@@ -1,9 +1,14 @@
 package com.example.topology;
 
+import com.example.models.DigitalTwin;
+import com.example.processors.DigitalTwinProcessor;
 import com.example.processors.HighWindFlatmapProcessor;
 import com.example.serdes.wrapper.JsonSerdes;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
 // this topology will be called by the "ProcessorApp"
 public class ProcessorAppTopology {
@@ -69,7 +74,7 @@ public class ProcessorAppTopology {
                 "reported-state-events" // name of the topic to read from
         );
 
-        // ------- C. Add other procesors ----------------------------
+        // ------- C. Add other processors ----------------------------
         /*
         Possible other processors could be added
         (i) REKEY Processor: a processor to perform "rekey" operations on the event stream/records
@@ -79,14 +84,14 @@ public class ProcessorAppTopology {
 
         /*
         **** But in our cases, we would not perform the REKEY, so, no REKEY processor is required. What we will perform is:
-        (i) STREAM Processor: a stateless high winds stream processor
+        (i) (Stateless) STREAM Processor: a stateless high winds stream processor
             - With power=OFF (to signal Turbine shutdown) if the wind speed is greater than 65 mph, then send a shutdown signal to the downstream processors
-        (ii) STREAM Processor: a stateful processor that saves "digital-twin" records (compised of a reported and desired state)
+        (ii) (Stateful) STREAM Processor: a stateful processor that saves "digital-twin" records (compised of a reported and desired state)
             - to a new key-value state-store named "digital-twin-store"; StoreBuilder is required here
 
             Example Data to store:
             Key_1|Value_{
-              "desired": {
+              "desired": { // the HighWindFlatmapProcessor will generate this desired state
                 "timestamp": "2020-11-23T09:02:01.000Z",
                 "power": "OFF"
               },
@@ -96,7 +101,9 @@ public class ProcessorAppTopology {
                 "power": "ON"
               }
             }
-         */
+           (iii) (Last Processor) SINK Processor, to write the enriched combined events (desired, reported) back into a Kafka topic named "digital-twin"
+            as JSON Byte stream data; means only serialization is required
+         * */
 
         // C1. (Stateless) Add a STREAM Processor, i.e. Stateless high wind stream processor
         // Purpose: For generating SHUTDOWN signals when our wind turbine is reporting dangerous wind speeds. i.e.
@@ -113,6 +120,90 @@ public class ProcessorAppTopology {
                 "reported-state-events" // Check the Archtiecture Diagram;
                                                     // This Stream Processor has a hirarchy to parent processor "reported-state-events"
         );
+
+        // C2. Task. We need a way to combine this "desired" and "reported" state event into a single event/record
+        // (Stateful) Add a STREAM Processor, i.e. Stateful processor that saves "digital-twin" records into a state-store
+        // Note: Stateful operations in Kafka Stream requrues "state-store" for maintaining some memory of previously seen data.
+        // What we are going to store in the state-store named "digital-twin-store"
+        /*
+        Example Data in state-store (should be):
+        Key_1|Value_{
+              "desired": { // the HighWindFlatmapProcessor will generate this desired state
+                "timestamp": "2020-11-23T09:02:01.000Z",
+                "power": "OFF"
+              },
+              "reported": {
+                "timestamp": "2020-11-23T09:00:01.000Z",
+                "windSpeedMph": 68,
+                "power": "ON"
+              }
+            }
+
+          Task. We need a way to combine this "desired" and "reported" state event into a single event/record
+          - Why this need to be stateful?
+          - bcoz records/events will arrive at different times for a given wind turbine, we have a stateful requirement
+          to remembering the last recorded and desired state record for each turbine.
+
+          Q. Whats the differnce between "state-store" creation statregies of ProcessorAPI and DSL?
+          ** our earlier implementaiton in ch-4/5 was DSL based where we created state-store as below
+
+          // State-store creation strategy in DSL
+          KeyValueBytesStoreSupplier storeSupplier =
+                Stores.persistentTimestampedKeyValueStore("my-store");
+
+          grouped.aggregate(
+                initializer, // initialize the core class object to store raw data in state-store;
+                            //i.e. if the initializer is HighScore::new -> means data in the state-store will be the HighScore object
+                adder, // aggregation logic is defined here
+                        // (key, to , from) -> means i.e. data from "enrichedValue" will be merged into "highScoreValue"
+                Materialized.<String, String>as(storeSupplier)); // And the merged data will be stored in state-store named "my-store"
+
+         ** Moreover, DSL automatically creaate intermediate state-stores
+         ** But processor api doesn't automatically create state-stores unless explicitely defined
+         */
+
+        // C2.1 Add the Stateful STREAM Processor "digital-twin-processor" in the Topology
+        processorApiTopologyBuilder.addProcessor(
+                "digital-twin-processor", // STREAM processor name
+                DigitalTwinProcessor::new, // method reference // its a stream processor; thats why it needs to implement the "Processor" interface
+                                                // ProcessSupplier - the actual stream function that Stream processor will execute; business logics are written there
+                "high-wind-flatmap-processor", // parent-processor -01
+                                                        // Check the Archtiecture Diagram;
+                                                        // This Stream Processor has a hirarchy to parent processor "high-wind-flatmap-processor""
+                "desired-state-events"  // parent-processor-02
+                                        // Check the Architecture Diagram;
+
+        );
+        // C2.2 Use StoreBuilder to create a state-store for ProcessorAPI to store the merged "desired" and "reported" states into a single record/event
+        // Create State-store for digital twin records
+        StoreBuilder<KeyValueStore<String, DigitalTwin>> storeBuilderForProcessorApi=
+                Stores.keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore("digital-twin-store"),
+                        Serdes.String(), // key_1_string
+                        JsonSerdes.DigitalTwin() // Value deserialzied in DigitalTwin Object to combine both "desired" and "reported" states
+                                                // Also serialized in Byte Stream JSON data from DigitalTwin Java Object when read from state-store
+                                                // Note: unlike earlier in ProcessorAPI, we dont only specify the deserailzier here
+                                                // infact we need both serialzier and deserialzier as these state-store data has to be written into the Dowstream Kafka SINK Processor into a new topic called "digital-twin"
+                );
+
+        // C2.3 Add the state-store to the STREAM processor "digital-twin-processor"
+        processorApiTopologyBuilder.addStateStore(
+                storeBuilderForProcessorApi, // State-store name "digital-twin-store"
+                "digital-twin-processor" // STREAM processor name
+                );
+
+
+        // C3. (Last Processor) SINK Processor, to write the enriched combined events (desired, reported) back into a Kafka topic named "digital-twin"
+        //            as JSON Byte stream data; means only serialization is required
+        processorApiTopologyBuilder.addSink(
+                "digital-twin-sink", // SINK processor name
+                "digital-twins", // write to topic "digital-twins"
+                Serdes.String().serializer(), // Key_1_String_only serailzier as we are writing back to kafka stream topic
+                JsonSerdes.DigitalTwin().serializer(), // value_combined_both_desired and reported state
+                "digital-twin-processor"
+        );
+
+
 
 
         // Return the topology builder
