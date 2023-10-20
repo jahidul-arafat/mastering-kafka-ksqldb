@@ -34,6 +34,10 @@ For that
 -
  */
 // Tag: its a stateless processor
+// Question: can we convert this to DSL?
+// Precheck: Check if any scheduling periodic function like Pubctuator in "DigitalTwinProcessor" exits here?
+// No; Means, it has no explicit deprendency on Processor API
+// We can convert this to a DSL
 public class HighWindFlatmapProcessor // this is a Stateless STREAM processor created for ProcessorAppTopology
     implements Processor<String, TurbineState, String, TurbineState> { // implements the Processor interface, not functional interface
 

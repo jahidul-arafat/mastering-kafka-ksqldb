@@ -159,7 +159,7 @@ public class LeaderBoardService {
 
             // i.e. the Product/GameId {1} not found
             if (highScores == null){
-                ctx.status(404);
+                ctx.status(404); // HTTP Not Found error
                 log.info("Key {} not found in the local store", productId);
                 return;
             }

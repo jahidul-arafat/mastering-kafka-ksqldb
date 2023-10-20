@@ -62,7 +62,7 @@ public class App {
         // How to improve the visibility of Kafka Stream Applicaiton
         // how to listen to rebalance triggers in our Kafka Streams application
         // Approach-01/ State Listener: To monitor Kafka Stream applications state
-        // i.e. when a rebanacing is tiggered which is impctful for Stateful applicaitons
+        // i.e. when a rebalancing is tiggered which is impctful for Stateful applicaitons
         // Example: @MailChimp, they has a speical matrix that gets incremented when a Rebalancing is triggered and they connect that to Promethues
         // Kafka Stream Applicaiton States:
         // (a) Created -> Not Running

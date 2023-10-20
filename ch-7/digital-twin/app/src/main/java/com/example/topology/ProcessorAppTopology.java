@@ -176,6 +176,13 @@ public class ProcessorAppTopology {
         );
         // C2.2 Use StoreBuilder to create a state-store for ProcessorAPI to store the merged "desired" and "reported" states into a single record/event
         // Create State-store for digital twin records
+        // Hints: This Key-Value store will be same for both PAPI and DSL based implementations. It dependends on whether
+        /*
+        - if StreamBuilder used for topology build -> then DSL based implementation
+        - if Topology is used for topology build -> then PAPI based implementation; if PAPI based implementation, then
+          we have to explicitly mention the processor name i.e. "digital-twin-processor" atatched to this state-store.
+        - if DSL based implementation, processor name need not to be mentioned; Kafka topology will create an intermediate processor name by itself
+         */
         StoreBuilder<KeyValueStore<String, DigitalTwin>> storeBuilderForProcessorApi=
                 Stores.keyValueStoreBuilder(
                         Stores.persistentKeyValueStore("digital-twin-store"),

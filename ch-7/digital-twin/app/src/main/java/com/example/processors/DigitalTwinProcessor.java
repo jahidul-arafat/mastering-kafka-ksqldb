@@ -3,6 +3,8 @@ package com.example.processors;
 import com.example.models.DigitalTwin;
 import com.example.models.TurbineState;
 import com.example.models.Type;
+import io.javalin.core.util.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -11,9 +13,12 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
+
 
 // tag: Stateful processor with Punctuator to minimize and clean the "digital-twin-store" state store periodically
 // Objective: to combine both desired and reported states into a single record/event
@@ -36,8 +41,15 @@ Key_1|Value_{
               }
             }
  */
+
+// Note: this processor is explicitly PAPI dependent; cant convert this to a DSL
+// Why: Because it has a schedule periodic function called Punctutator to remove the old keys from the "digital-twin-store"
+// This Schedule periodic function is an important feature of Processor API
 public class DigitalTwinProcessor
         implements Processor<String, TurbineState, String, DigitalTwin> { // Processor is an interface; its methods need to be implemented here
+
+    // Define the logger -- Class Attribute
+    private static final Logger log = LoggerFactory.getLogger(DigitalTwinProcessor.class);
 
     // ------------------ Define Object attributes -----------------------
     // Define the context
@@ -45,7 +57,7 @@ public class DigitalTwinProcessor
 
     // Define the KeyValue store used by this STREAM statful Processor
     // Note: used state-store "digital-twin-store" which is a key-value store
-    private KeyValueStore<String, DigitalTwin> kvStore;
+    private KeyValueStore<String, DigitalTwin> kvStore; // Key_1, Value_both_reported_and_desired_state_of_turbine
 
     // Define the Punctuator
     // Purpose: To remove all digital-twin records from the state-store that haven't updated in more than 7 days
@@ -55,19 +67,27 @@ public class DigitalTwinProcessor
     // ------------Override the methods()---------------------------
     // A. Initialize the Processor Context with State-store for Stateful processing
     @Override
+    @SuppressWarnings("unchecked") // means to avoid waring in this method
     public void init(ProcessorContext<String, DigitalTwin> context) {
+        log.info("Initializing both ProcessorContext and Punctuator(Cleaner) in the same thread; So concurrecny issue");
         //Processor.super.init(context);
+
         // a. Define the context, keep it locally
         this.context = context; // keep the context locally
         // Note: the whole ProcessorTopology is a context and the records/events flows within the context
         // will be used later in Punctuator and Commit
         // Punctuator -> to remove old digital twin records that haven't updated in more than 7 days
+
+
+
+        // For Punction purpose, not for merging the digital-twin/desired_state_event with reposted-state-event into "digital-twin-store"
         // b. Fetch the state-store
-        // fetch the state-store attached to the "digital-twin-processor" in the ProcessTopology context
+        // fetch the state-store attached to the "digital-twin-processor" in the ProcessTopology context to prune the old data
         this.kvStore = context.getStateStore("digital-twin-store"); // state-store name "digital-twin-store"
 
         // c. Initialize the Punctuator within the ProcessorTopology context
         // Schedule a punctuate() method every 5 mins based on local system wall clock time
+        log.info("Initializing Punctuator; Punctuator will run every after 5 mins to clean the state-store");
         this.punctuator = this.context.schedule(
                 Duration.ofMinutes(5),
                 PunctuationType.WALL_CLOCK_TIME,
@@ -85,26 +105,35 @@ public class DigitalTwinProcessor
         // a. fetch the key and value from the record
         String key = originalRecord.key();
         TurbineState value = originalRecord.value();
+        System.out.println("Processing: " + value);
 
-        // b. create a new digital twin object
-        // b1.1 Fetch the key from kvStore; if exists
+        // b. Check if the value TYPE is a "desired" or "reported" state or null
+        // if null, just return from the method; because the TYPE is not set
+        if (value.getType() == null) {
+            log.warn("Skipping state update due to unset value type (must be: desired, reported)");
+            return;
+        }
+
+        // c. create a new digital twin object
+        // c1.1 Fetch the key from kvStore; if exists
         DigitalTwin digitalTwin = kvStore.get(key);
         if (digitalTwin == null) {
-            // b1.2 Create a new digital twin object, if not exists
+            // c1.2 Create a new digital twin object, if not exists
             digitalTwin = new DigitalTwin(); // NoArgument constructor
         }
-        // b1.3 Check if the records in a "desired" or "reported"
+        // c1.3 Check if the records in a "desired" or "reported"
         // if desired
         if (value.getType() == Type.DESIRED) {
-            digitalTwin.setDesiredState(value);
+            digitalTwin.setDesiredState(value); //passing the whole value object
         } else if (value.getType() == Type.REPORTED) {
-            digitalTwin.setReportedState(value);
+            digitalTwin.setReportedState(value); // passing the whole value object
         }
 
-        // c. write the new digital twin object into the state-store
+        // d. write the new digital twin object into the state-store
+        log.info("Storing digital twin record: "+ digitalTwin);
         kvStore.put(key, digitalTwin); // Key_1_String
 
-        // d. Create a new "DigitalTwin" record with this modified state
+        // e. Create a new "DigitalTwin" record with this modified state
         // make sure the new record to add the original timestamp
         /*
         New Record Example:
@@ -121,15 +150,19 @@ public class DigitalTwinProcessor
             }
 
          */
+        log.info("Creating a new DigitalTwin record with key: " + key + " and value: " + digitalTwin+
+                " timestamp: "+originalRecord.timestamp());
         Record<String, DigitalTwin> newRecord = new Record<>(key, digitalTwin, originalRecord.timestamp());
 
         // forward the new record to all downstream processors within the ProcessorTopolocy context
+        log.info("Forwarding new record to downstream processors within the ProcessorTopology context");
         context.forward(newRecord);
     }
 
     @Override
     public void close() {
         // Processor.super.close();
+        log.warn("Cancelling the Punctuator because ProcessorTopology is closing....");
         punctuator.cancel(); // cancel the punctuator when our processor is closed
     }
 
@@ -159,8 +192,11 @@ public class DigitalTwinProcessor
             while (recordIterator.hasNext()) {
                 // b1.1 Get the current record
                 KeyValue<String, DigitalTwin> currentRecord = recordIterator.next();
+                log.info("Checking to see if record: "+ currentRecord.key+ " will expire or not");
+
                 // b1.2 Get the last reported state of the current record; means the last reported timestamp, windspeed, power
                 TurbineState lastReportedStateOfCurrentRecord = currentRecord.value.getReportedState();
+
                 // b1.3 Check if the last reported state of the current record is NULL or not
                 // i. if NULL, just continue to the next record
                 if (lastReportedStateOfCurrentRecord == null) {
@@ -173,6 +209,7 @@ public class DigitalTwinProcessor
                 long daysSinceLastUpdate = Duration.between(lastUpdateTimeStamp, Instant.now()).toDays();
                 if (daysSinceLastUpdate >= 7) {
                     // delete the current record
+                    log.info("Deleting record: "+ currentRecord.key);
                     this.kvStore.delete(currentRecord.key); // just delete the Key from this key-value state-store
                 }
             } // while iterator ends
