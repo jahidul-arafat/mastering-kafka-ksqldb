@@ -4,15 +4,14 @@ import com.example.models.DigitalTwin;
 import com.example.models.Power;
 import com.example.models.TurbineState;
 import com.example.models.Type;
+import com.example.processors.DigitalTwinProcessor;
+import com.example.processors.DigitalTwinValueTransformerWithKey;
 import com.example.serdes.wrapper.JsonSerdes;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Printed;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -26,7 +25,7 @@ import java.util.List;
 // Why: To reduce the operaitonal complexity while using some granular level access flexibility of PAPI
 public class CombinedAppTopology {
     private static final Logger log = LoggerFactory.getLogger(CombinedAppTopology.class);
-    public static Topology combinedBuild(){ // Building Kafka Stream topology using both DSL and ProcessorAPI
+    public static Topology build(){ // Building Kafka Stream topology using both DSL and ProcessorAPI
         // A. StreamBuilder to construct the Kafka Topology
         StreamsBuilder topologyStreamBuilder = new StreamsBuilder();
 
@@ -80,7 +79,8 @@ public class CombinedAppTopology {
         getPrintStream(reportedStateEventSourceProcessor, "source_processor_reported-state-events");
 
 
-        // Level-2 (see diagram)
+        // Level-2 (see diagram): Generate shutdown signal if dangerous wind conditions are detected
+        // Note: Must not genearte the SHUTDOWN signal directly to the Live Turbine, instead to a Digital Copy/ Digital Twin of the Live Turbine
         // ------- C. Add other processors ----------------------------
         /*
         Possible other processors could be added
@@ -191,6 +191,7 @@ public class CombinedAppTopology {
 
                                     // Add the Original (unmodified) Record into the List
                                     recordsList.add(originalReportedValue);
+                                    System.out.println("[Tmp(a)/] record list: "+recordsList);
 
 
                                     // Check if HighWinSpeed and if the Turbine is ON
@@ -201,19 +202,28 @@ public class CombinedAppTopology {
                                     if (originalReportedValue.getWindSpeedMph() > 65 &&
                                             originalReportedValue.getPower()== Power.ON) {
                                         log.info("Turbine {} has detected high wind. Sending shutdown signal ...",turbineId);
-                                        // Create a Digital Twin of the Turbine's reported value and set the Shutdown signal (Power OFF)
+                                        // Create a Digital Clone of the Turbine's reported value and set the Shutdown signal (Power OFF)
                                         TurbineState desiredTurbineRecordValue = TurbineState.clone(originalReportedValue);
                                         desiredTurbineRecordValue.setPower(Power.OFF);
                                         desiredTurbineRecordValue.setType(Type.DESIRED);
 
                                         // add the desiredTurbineRecordValue into the record list
                                         recordsList.add(desiredTurbineRecordValue);
+                                        System.out.println("[Tmp(b)/] record list: "+recordsList);
                                     }
+                                    else{
+                                        System.out.println("Entering into ambuguous sectionn in Processor Topology/HighWindFlatMap ....");
+                                        log.info("Turbine {} has not detected high wind. No shutdown signal will be sent...",turbineId);
+                                        log.warn("[Ambiguity Resolve State] ...");
+                                        TurbineState desiredTurbineRecordValue_Ambiguity = TurbineState.clone(originalReportedValue);
+                                        desiredTurbineRecordValue_Ambiguity.setType(Type.DESIRED);
+                                        recordsList.add(desiredTurbineRecordValue_Ambiguity);
+                                    }
+                                    System.out.println("[Tmp(c)/] record list: "+recordsList);
                                     return recordsList;
-
                                 })
                         // merge originalStream/ModifiedWithDesiredValue with desiredStateEventSourceProcessor KStream to produce a larger stream
-                        .merge(desiredStateEventSourceProcessor)
+                        .merge(desiredStateEventSourceProcessor) // mostly not used, as we rarely not emitting the events in topic "desired-state-events""
                 ;
         getPrintStream(highWindFlatMapStreamProcessor, "HighWindFlatMapStreamProcessor");
 
@@ -238,8 +248,66 @@ public class CombinedAppTopology {
         topologyStreamBuilder.addStateStore(
                 storeBuilderForDigitalTwinRecords // State-store name "digital-twin-store"
         );
+        // Next, once the state-store is defined and attached to the Topology, next is to Recreate the functionality of "DigitalTwinProcessor" as  we defined for PAPI implementations
+        // Note: DigitalTwinProcesor-> creates 1:1 records for each Turbine-> combined both{DesiredState, ReportedState} under a single TurbineID i.e. 1
+        // Note: it also periodically run the Punctuator to check if any of the DigitalTwin of the Turbine didnt receive a signal for over 7 days
+        //        -> if so, then remove that digitalTwin from the state-store|| its a state-store cleaning step
 
-        // 3.2
+        // 3.2 Create a DigitalTwin to combine both "desired" and "reported" states into a single "DigitalTwin" record
+        // and then store it in the state-store
+        // and finally send it to a downstream SINK processor to write the combined/enriched data back to the kafka stream
+        // avoid using PorcessorAPI, instead use Transformer
+        /*
+        But, the question is, a Processor based implementation is already available in "DigitalTwinProcessor".
+        Can we use that?
+        Whats the problem if we use that?
+
+        i.e if we use below
+        highWindFlatMapStreamProcessor.process(
+                DigitalTwinProcessor::new,
+                "digital-twin-store"
+        );
+        ** this will not work, as we have to connect to the downstream SINK processor, which cant be done with processor based implementaiton here
+        ** Processors from PAPI should only be used, when there is no link to the downstream operators.
+        ** But in our case, it has to connect to the downstream SINK processor, to write the combined/enriched data back to the kafka stream
+        -> Then, the solution is: to use "Transformers" | Variation to use: transformValuesWithKey
+
+        What out combined data would look like?
+        Key_1|Value_{
+              "desired": { // the HighWindFlatmapProcessor will generate this desired state
+                "timestamp": "2020-11-23T09:02:01.000Z",
+                "power": "OFF"
+              },
+              "reported": {
+                "timestamp": "2020-11-23T09:00:01.000Z",
+                "windSpeedMph": 68,
+                "power": "ON"
+              }
+            }
+        -> here, key -> is read only, cant be modified
+        -> No need to forward multiple multiple records/events to a downstream operator, instead for 1 input -> 1 Output
+
+
+         */
+
+        // 3.2.1 Forward the stateless highWind stream (with SHUTDOWN signal in digital twin copy of Turbine) to
+        // digitalTwinStreamProcessor, which combine both reported state and desried state under a a single TurbineID for each record
+        // and store it the persistent key-value state-store defined above "digital-twin-store"
+        // 1:1
+        // Key-> read only
+        // No multiple record to downstream operator
+        // Using transformer
+        var digitalTwinStatefulStreamProcessor =highWindFlatMapStreamProcessor
+                .transformValues(DigitalTwinValueTransformerWithKey::new, "digital-twin-store");
+        getPrintStream(digitalTwinStatefulStreamProcessor,"digital-twin-value-transformer-with-key");
+
+        // Level-4: Send the combined records {desried,reported} to SINK processor to write the data basck to kafka stream topic "digital-twins"
+        digitalTwinStatefulStreamProcessor.to(
+                "digital-twins",
+                Produced.with(
+                        Serdes.String(), JsonSerdes.DigitalTwin()
+                )
+        );
 
 
         // Return the topology to App.main()
@@ -252,7 +320,8 @@ public class CombinedAppTopology {
     // K-> byte[]
     // V-> Tweet/EntitySentiment
     private static <K, V> void getPrintStream(KStream<K, V> kStream, String label) {
-        kStream.print(Printed.<K, V>toSysOut().withLabel(label));
+        //kStream.print(Printed.<K, V>toSysOut().withLabel(label));
+        kStream.foreach((k, v) -> System.out.printf("[%s] -> %s, %s\n",label, k, v));
     }
 
     // method to print a kTable

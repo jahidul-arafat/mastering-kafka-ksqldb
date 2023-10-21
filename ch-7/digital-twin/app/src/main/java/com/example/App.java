@@ -3,6 +3,7 @@ package com.example;
 import com.example.rebalancing.CustomStateRestoreListener;
 import com.example.restful_services.DigitalTwinRestService;
 import com.example.serdes.wrapper.JsonSerdes;
+import com.example.topology.CombinedAppTopology;
 import com.example.topology.ProcessorAppTopology;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -23,7 +24,12 @@ public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
     public static void main(String[] args) {
         // Call the Topology Build to build the kafka Stream Topology
-        Topology topology = ProcessorAppTopology.build();
+
+        // Simulation-01: Using ProcessorAPI topology
+        //Topology topology = ProcessorAppTopology.build();
+
+        // Siumulation-02: Using Combined (DSL and ProcessorAPI) based topology
+        Topology topology = CombinedAppTopology.build();
 
         // For RESTful API calls
         // Override the system properties
@@ -44,17 +50,17 @@ public class App {
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
 
         // --------- BUILDING TOPOLOGY and START STREAMING------------------------
-        System.out.println("Starting Digital Twin Streams App");
+        System.out.println("Starting Digital Twin Streams App (using PAPI/(DSL+PAPI) Topology Architecture)");
         KafkaStreams streams = new KafkaStreams(topology, props);
 
-        // A. Define the Rebalacing strategies
+        // A. Define the Rebalancing strategies
         // How to improve the visibility of Kafka Stream Applicaiton
         // how to listen to rebalance triggers in our Kafka Streams application
 
         // A1.1 Approach-01/ State Listener: To monitor Kafka Stream applications state
-        // i.e. when a rebanacing is tiggered which is impctful for Stateful applicaitons
+        // i.e. when a rebalancing is tiggered which is impctful for Stateful applicaitons
         // Example: @MailChimp, they has a speical matrix that gets incremented when a Rebalancing is triggered and they connect that to Promethues
-        // Kafka Stream Applicaiton States:
+        // Kafka Stream Application States:
         // (a) Created -> Not Running
         // (b)Created -> Running -> Error-> Pending Shutdown-> Not Running
         // (c)Created -> Running -> Reblancing -> Pending Shutdown -> Not Running
