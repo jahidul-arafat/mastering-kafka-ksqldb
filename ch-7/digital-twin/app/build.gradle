@@ -32,7 +32,7 @@ dependencies {
     // required by custom serdes for deserialization(byte-stream to json) and serialization (json to byte-stream)
     implementation 'com.google.code.gson:gson:2.8.9'
 
-    // for loading config from a file. we discuss this briefly in appendix A
+    // for loading config from a file.
     implementation 'com.typesafe:config:1.3.3'
 
     // Use JUnit Jupiter for testing.

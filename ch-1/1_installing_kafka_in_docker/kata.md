@@ -54,10 +54,10 @@ kafka-configs \ 1
 
 # Produce some data for the given topic using Kafka-console-producer
 kafka-console-producer \ 
-    --bootstrap-server localhost:9092 \
-    --property key.separator=, \ 
-    --property parse.key=true \
-    --topic users
+  --bootstrap-server localhost:9092 \
+  --property key.separator=, \ 
+  --property parse.key=true \
+  --topic users
 # Data
 #> 1,Ailly
 #> 2, Billy
