@@ -36,7 +36,9 @@ public class DslExample {
         // Questions: Discrepancy between the design of Kafka's Storage Layer (a distributed, append-only log) and a table?
         // Discrepancy 01: tables are updating the model data !!!!
         // Ans: Table isnt somethign we cossumed from Kafka, but something we build on the client side
-        KStream<Void, String> kStream = builder.stream("users"); // kStream is an Unbounded stream of data/event/records
+
+        // Since we  modified the  Deserializer for key (byte-stream to JSON), the key data should not be void and must be parsed
+        KStream<String, String> kStream = builder.stream("users"); // kStream is an Unbounded stream of data/event/records
 
 
         // B. STREAM PROCESSOR
@@ -50,22 +52,19 @@ public class DslExample {
         kafka-console-producer \
           --bootstrap-server localhost:9092 \
           --property key.separator=, \
+          --property parse.key=true \
           --topic users
 
-        // avoid using flag  --property parse.key=true // bcoz we it will parse the key, when in the kStream we defined the key to be null
-        // if we use this flag and then try to use stream input <1,test data>, the program will fail
-        // Program cant be recover, until we delete the topic "users" and recreate it again
-
          Sample input:
-         > jahidularafat            #<null, jahidularafat>      #<key,value>
-         > data1                    #<null, data1>
-         > data2                    #<null, data2>
-         > 1, test data             #<null, 1, test data>
+         > 1, jahidularafat            #<1, jahidularafat>      #<key,value>
+         > 2, data1                    #<2, data1>
+         > 3, data2                    #<3, data2>
+         > 1, test data                #<1, 1, test data>
          */
 
-        kStream.foreach(
+        kStream.foreach( // replace by Lambda method referecence DslExample::streamTransformationLogic
                 (key, value) -> { // ex. value = "jahidularafat"
-                    streamTransformationLogic(value); // Transforming data, print in console and write to file
+                    streamTransformationLogic(key, value); // Transforming data, print in console and write to file
                 });
 
         // you can also print using the `print` operator
@@ -76,8 +75,8 @@ public class DslExample {
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev1");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Void().getClass());
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass()); // Key is not empty/null; deserialized (input byteStream --into-> String)
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass()); // value is not empty/null; deserialized (input byteStream --into-> String)
 
         // build the topology and start streaming
         Topology topology = builder.build();
@@ -92,6 +91,10 @@ public class DslExample {
     // Part of STREAM PROCESSOR
     // method to write a string into a text file into append only mode
     public static void appendToFile(String filename, String content) {
+        String msgToConsole = String.format("Content: <%s> .... writing to file >> <%s>\n", content,filename);
+        System.out.printf(msgToConsole);
+
+        // write the content into the file
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
             writer.write(content + "\n");
         } catch (IOException e) {
@@ -100,6 +103,7 @@ public class DslExample {
         }
     }
 
+    // redundant method to write a List of Strings into a text file into append only mode
     public static void addListContentToFile(String filename, @NotNull List<String> content) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
             for (String s : content) {
@@ -112,7 +116,7 @@ public class DslExample {
     }
 
     // Part of STREAM PROCESSOR
-    public static void streamTransformationLogic(String content) {
+    public static void streamTransformationLogic(String key, String content) {
         // System.out.println("Applying the Business Logic to the Stream input for Stream Transformation by the Stream Processor");
         // Business Logic for the transformation
         // create a function to transform the value of the record into upper case
@@ -123,8 +127,7 @@ public class DslExample {
         };
 
         // check if the key is NULL or not; if NULL, then replace it with a default value
-        //key = key == null ? "NULL" : key;    // lambda checking if key is NULL or not
-        String key="NULL";
+        key = key == null ? "NULL" : key;    // lambda checking if key is NULL or not
 
         // define the predicate to check if vowel
         Predicate<Character> isVowel = c -> "aeiou".indexOf(Character.toLowerCase(c)) != -1; // Predicate to check if the character is vowel; -1 means character not found in the vowel list
