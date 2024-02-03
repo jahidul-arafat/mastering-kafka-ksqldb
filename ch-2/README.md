@@ -10,12 +10,12 @@
 # then start the Kafka container from the Dockerfile using the Intellij IDEA; depends on <ZOOKEEPER> readiness
 # then start the <kafka-create-topics> container which will create a topic "users" in the <kafka> cluster
 
-# Step-2: Let the Kafka producer produce some event/data/record which will be consumed by an instance of our 'DSLExample' application
+# Step-2: Let the Kafka producer produce some event/data/record which will be consumed by an instance of our 'DSLExample' application into topic "users"
 # 2.1 docker exec into the kafka container; this is the main placeholder where we will execute our kafka related commands
 > docker exec -it kafka bash # <kafka> is the name of the container
 
 # 2.2 Inside the Kafka container, run the 'kafka-console-producer' command to produce some event/data/record into the kafka stream
-(kafka-container)> kafka-console-producer --bootstrap-server localhost:9092 --property key.separator=, --property parse.key=true --topic rser
+(kafka-container)> kafka-console-producer --bootstrap-server localhost:9092 --property key.separator=, --property parse.key=true --topic users
 # 2.3 Now enter the below inputs into the kafka-console-producer prompt
   > 1, Sample Data        # <key,value> pair, key must not be empty
   > 2, Laplus
@@ -33,7 +33,7 @@
 > gradle build
 
 # 3.3 Start the application
-> ./gradlew runDSL    
+> ./gradlew runDSL --info
 ```
 
 ## Tear-down the Kafka cluster

@@ -11,7 +11,7 @@ import org.apache.kafka.streams.Topology;
 public class ProcessorApiExample {
     public static void main(String[] args) {
         // Create a Processor Topology
-        Topology topology = new Topology();
+        Topology topology = new Topology(); // Unlike DSLExample, we dont need any StreamBuilder here
 
         // A. SOURCE PROCESSOR
         // add a source processor into the topology which reads from a Kafka topic "users"
@@ -24,10 +24,10 @@ public class ProcessorApiExample {
 
         // set the required properties for running Kafka Streams
         Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "dev2");
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-consumer-instance-2");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Void().getClass());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // build the topology and start streaming

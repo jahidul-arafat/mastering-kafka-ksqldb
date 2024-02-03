@@ -12,7 +12,8 @@ import java.util.function.Function;
 Processor<Key,Value,OutputKey, OutputValue>
  */
 // Here, we used CustomProcessor -> SayHelloProcessor which implement the Processor interface
-public class SayHelloProcessor implements Processor<Void,String,Void,Void> {
+public class SayHelloProcessor implements Processor<String,String,Void,Void> {
+    public static final String APP_TYPE="PAPI";
     // initializing the stream processor
     // ProcessorContext<OutputKey, OutputValue>
     @Override
@@ -24,23 +25,11 @@ public class SayHelloProcessor implements Processor<Void,String,Void,Void> {
     // Record<Key,Value>
     // For each record/event
     @Override
-    public void process(Record<Void,String> record) {
-        // Business Logic for the transformation
-        // create a function to transform the value of the record into upper case
-        StringManupulator<String,String> stringManupulator = (demoString)-> demoString.toUpperCase(); // FunctionalInterface //Atomic
-        Function<String,Integer> lenCalFunc = (demoString)-> demoString.length(); // Function
-        Function<String, String> isTooShort = (demoString)-> {
-            return lenCalFunc.apply(demoString) > 10? "Full Length" : "too Short"; //lambda function
-        }; // Function
-
-        String formattedString = String.format("(Processor API) Hello, %s. Name Length is: %d(%s) ",
-                stringManupulator.apply(record.value()),
-                lenCalFunc.apply(record.value()),
-                isTooShort.apply(record.value()));
-        System.out.println(formattedString);
+    public void process(Record<String,String> record) {
+        StreamTransformationLogic.commonBusinessProcessingLogic(record.key(), record.value(), APP_TYPE);
     }
 
-    // clean up the function
+    // clean up function
     @Override
     public void close() {
         Processor.super.close();

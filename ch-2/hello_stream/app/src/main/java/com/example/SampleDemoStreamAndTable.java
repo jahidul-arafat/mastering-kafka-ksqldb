@@ -14,7 +14,7 @@ public class SampleDemoStreamAndTable {
                 Map.entry("a", 2)
         );
         // create a new hash map
-        var table = new HashMap<>();
+        Map<String,Integer> table = new HashMap<>();
         demoStream.forEach(entry -> table.put(entry.getKey(), entry.getValue()));
 
         // print the stream
@@ -24,14 +24,14 @@ public class SampleDemoStreamAndTable {
         System.out.println(table); //{a=2, b=1}
 
         // convert the table into demoStream
-        var demoStreamFromTable = table
+        List<Map.Entry<String,Integer>> demoStreamFromTable = table
                 .entrySet()
                 .stream()
                 .collect(Collectors.toList());
         // add an element in the demo stream
         demoStreamFromTable.add(Map.entry("c", 3));
         // print the demo stream
-        System.out.println(demoStreamFromTable);
+        System.out.println(demoStreamFromTable); // [a=2, b=1, c=3]
 
     }
 }
