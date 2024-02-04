@@ -43,13 +43,13 @@ services:
     volumes:
     - ./scripts:/scripts
 
-  schema-registry:
+  schema-registry: # deployed at localhost:8081/
     image: confluentinc/cp-schema-registry:6.0.0
     depends_on:
-      - zookeeper
-      - kafka
+      - zookeeper # Zookeeper handles the coordination and metadata storage for the Schema Registry
+      - kafka # Kafka plays a role in message exchange and topic-based communication. Kafka doesn't provide native support for schema management.
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
     ports:
-      - "8081:8081"
+      - "8081:8081" # localhost:8081

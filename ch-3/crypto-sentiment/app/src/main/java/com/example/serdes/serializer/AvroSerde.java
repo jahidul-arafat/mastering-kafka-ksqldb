@@ -17,7 +17,7 @@ Objective: Schema Registry-aware Avro Serdes requires some additional configurat
    for each of the data class i.e. "EntitySentiment" in the project
  */
 
-// Create a registry-ware Avro Serde for the EntitySentiment Avro Class
+// Create a registry-aware Avro Serde for the EntitySentiment Avro Class
 // This registry will be deployed in http://localhost:8081
 public class AvroSerde {
     // Target: AvroSerde.EntitySentiment("http://localhost:8081", false)

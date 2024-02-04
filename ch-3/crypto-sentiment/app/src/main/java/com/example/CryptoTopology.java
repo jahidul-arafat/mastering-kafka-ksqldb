@@ -20,7 +20,7 @@ import java.util.List;
 
 public class CryptoTopology {
     private static final List<String> currencies = Arrays.asList("bitcoin", "ethereum");
-    private static final boolean useSchemaRegistry = true;
+    private static final boolean useSchemaRegistry = true; // My Avro schema registry is at http://localhost:8081 ; I am not using the Confluent Online Schema registry here; instead managing my own schema reqistry here
 
     // Why static? Because App.main() is a static method and its gonna call this Topology.build() method
     public static Topology build() {
@@ -62,8 +62,8 @@ public class CryptoTopology {
 
         // B1. Filter the Retweets from the downstream processors
         // Means, we dont want any retweets to be processed by our Kafka Stream Processors
-        Predicate<byte[], Tweet> retweets = (key, tweet) -> tweet.isRetweet();
-        KStream<byte[], Tweet> filtered = source.filterNot(retweets); // it's a function using predicates
+        Predicate<byte[], Tweet> retweets = (key, tweet) -> tweet.isRetweet(); // filter to check if Tweet has Retweet Flag TRUE
+        KStream<byte[], Tweet> filtered = source.filterNot(retweets); // get the Stream of Tweets having no Reweets// it's a function using predicates
         //getPrint(filtered,"filtered-stream"); // new implementation
 
         // B2. Branching Stream
@@ -78,8 +78,8 @@ public class CryptoTopology {
 
         // Create branches using this predicates
         var branches = filtered.branch(englishTweets, nonEnglishTweets); // ordering of predicates matter
-        var englishStream = branches[0];
-        var nonEnglishStream = branches[1];
+        var englishStream = branches[0]; // kStream<byte[], Tweet> with english tweets
+        var nonEnglishStream = branches[1]; // kStream<byte[], Tweet> with non-english tweets
         //getPrint(englishStream, "english-tweet-stream"); // new implementation
         //getPrint(nonEnglishStream, "non-english-tweet-stream"); // new implementation
 
@@ -93,7 +93,7 @@ public class CryptoTopology {
         KStream<byte[], Tweet> translatedStream = nonEnglishStream.mapValues(
                 (tweet) -> {
                     //var newKey = tweet.getUser().getName().getBytes();
-                    var translatedTweet = languageClient.translate(tweet, "en");
+                    var translatedTweet = languageClient.translate(tweet, "en"); // return the translated tweet object
                     return translatedTweet;
                     //return KeyValue.pair(newKey, translatedTweet); // binding the new key and new value together
                 });
@@ -124,7 +124,10 @@ public class CryptoTopology {
         );
         getPrint(sentimentScoredStream, "sentiment-scored-tweet-stream"); // Avro encode records
 
-        // C. SINK PROCESSOR
+        // C. SINK PROCESSOR: write the Kafka stream (sentimentScoredStream) into a Kafka topic named "crypto-sentiment"
+        // Note: Kafka is a byte-in and bytes-out stream processing platform
+        // Serialization using AVRO before writing to Kafka Topic "crypto-sentiment"
+
         // Note: Kafka is a byte-in and bytes-out stream processing platform
         // Add a sink processor to the topology to write tweets to the Topic "crypto-sentiment"
         // KStream<K,V> ; KSteam is an interface
@@ -134,26 +137,58 @@ public class CryptoTopology {
 
         // We will be using registry-aware Avro Serde
         // Why? For better support for Schema evolution and smaller message sizes
-        if (useSchemaRegistry) {
+
+
+
+        /*
+        Summary:
+        - Avro is used for serialization when producing messages to the Kafka topic.
+        - Avro is involved in deserialization when consuming messages from the Kafka topic.
+
+        Explanation:
+        - Avro is a binary serialization format, and it includes a schema that describes the structure of the data being serialized.
+        - In our Kafka Streams application, we've defined a schema for the EntitySentiment data,
+        and Avro is being used to serialize instances of this data structure into byte arrays before they are sent to the Kafka topic.
+
+        - On the other side, when consumers read messages from the Kafka topic,
+        they need to deserialize the byte arrays back into the original data structures.
+        Avro is also involved in the deserialization process,
+        as it understands the schema information included in the serialized data and can reconstruct the original objects.
+         */
+
+        if (useSchemaRegistry) { // using Avro Schema Registry
             // options:  .to -> if we reached to the end of our Processor Topology
             // .repartition or .through -> if additional operators/stream processing logic is there
             // Here, http://localhost:8081 -> is the URL of the Schema Registry
             // false ->  schema should not be registered with the registry provided by Confluent
             // By using the schema registry, we can ensure that the data is written in the correct format and
             // that the Kafka broker can correctly interpret it.
+
+            /*
+            Syntax of AvroSerde.EntitySentiment("http://localhost:8081", false)
+            - If isKey is true, it means the Avro Serde is configured for handling key serialization and deserialization.
+            - If isKey is false, it means the Avro Serde is configured for handling value serialization and deserialization.
+
+            We Want Avro Serde to handle value serialization and deserialization.
+             */
             sentimentScoredStream.to(
                     "crypto-sentiment",
                     Produced.with(
-                            Serdes.ByteArray(),
-                            AvroSerde.EntitySentiment("http://localhost:8081", false)
+                            Serdes.ByteArray(), // Serdes.ByteArray() is a key serializer provided by Kafka Streams, and it indicates that the key should be serialized as a byte array.
+                            AvroSerde.EntitySentiment("http://localhost:8081", false) // means that the data (value) will be serialized into a byte stream using the Avro serialization format before being written to the Kafka topic.
+                            // The AvroSerde.EntitySentiment("http://localhost:8081", false) part specifies the Avro serialization for the value.
+                            // It means that instances of the EntitySentiment type will be serialized into a byte stream using the Avro serialization format.
+                            // The Avro schema and other necessary information are typically managed by a schema registry (in this case, at "http://localhost:8081"),
+                            // which allows consumers to deserialize the data properly.
+                            // Here, in our case Avro Serde will rely on a schema registry located at the specified URL ("http://localhost:8081") to fetch and manage Avro schemas. In this case, you are specifying "http://localhost:8081" as the schema registry URL.
                     )
             );
 
         } else {
-            // Registry-less
+            // Registry-less // not using Avro Schema Registry
             // Error prone
             // Without the schema registry, the Kafka broker will try to infer the schema from the data,
-            // which can lead to errors if the data contains fields that are not part of the schema.
+            // which can lead to errors if the data contains fields that are not part of the EntitySentiment Class.
             sentimentScoredStream.to(
                     "crypto-sentiment",
                     Produced.with(

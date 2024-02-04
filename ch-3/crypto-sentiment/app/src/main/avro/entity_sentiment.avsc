@@ -1,4 +1,5 @@
 {
+  // This Avro schema provides a formal definition of the structure of your data, ensuring that the data produced and consumed by your Kafka streams adheres to a well-defined format
   "namespace": "com.example.model", // this will not be generated inside the src, instead you will have in the build// the desired package name for our data class
   "name": "EntitySentiment",        // This Java Class will be automatically created using Gradle plug-in// the name of the Java class that will contain the Avro-based data model. This class will be used in subsequent stream processing steps
   "type": "record",                 // This Java Class or Data-Class will be automatically created

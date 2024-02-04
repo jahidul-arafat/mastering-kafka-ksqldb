@@ -21,4 +21,34 @@ kafka-avro-console-consumer --bootstrap-server kafka:9092 --topic crypto-sentime
 # to stop the docker setup
 docker-compose down
 
+# Schema Registry: https://docs.confluent.io/platform/current/schema-registry/index.html
+# Schema Registry provides a centralized repository for managing and validating schemas for topic message data, 
+# and for serialization and deserialization of the data over the network. 
+# Producers and consumers to Kafka topics can use schemas to ensure data consistency and compatibility as 
+# schemas evolve. Schema Registry is a key component for data governance, helping to ensure data quality, 
+# adherence to standards, visibility into data lineage, audit capabilities, 
+# collaboration across teams, efficient application development protocols, and system performance.
+
+# A AVRO Schema Registry is live at port 8081 for serlaiziation and deserialization
+# to see its contents
+# the avro schema name "crypto-sentiment-value" is created automatically based on the topic name "crypto-sentiment" where the SINK processor is writing the contens
+# contents are serialized to byte[] when writing back to the kafka topic.
+curl http://localhost:8081/subjects
+curl http://localhost:8081/subjects/crypto-sentiment-value/versions/latest
+---
+# output:
+// 20240204154408
+// http://localhost:8081/subjects/crypto-sentiment-value/versions/latest
+
+{
+  "subject": "crypto-sentiment-value",
+  "version": 1,
+  "id": 1,
+  "schema": "{\"type\":\"record\",\"name\":\"EntitySentiment\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"created_at\",\"type\":\"long\"},{\"name\":\"id\",\"type\":\"long\"},{\"name\":\"entity\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"text\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"sentiment_score\",\"type\":\"double\"},{\"name\":\"sentiment_magnitude\",\"type\":\"double\"},{\"name\":\"salience\",\"type\":\"double\"}]}"
+}
+
+curl http://localhost:8081/subjects/crypto-sentiment-value/versions/1
+curl http://localhost:8081/schemas/ids/1
+curl http://localhost:8081/config/crypto-sentiment-value # doesnt work for my self deployed schema registry at localhost:8081
+
 ```

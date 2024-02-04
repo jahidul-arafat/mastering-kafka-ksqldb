@@ -1,7 +1,6 @@
 package com.example.playground;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -10,13 +9,18 @@ import java.util.stream.Stream;
 public class FlatMapExample {
     public static void main(String[] args) {
         List<String> sentenceList = Arrays.asList("Hello World", "I am Ok", "I am fine", "Nice to meet you!");
-        var wordStream = sentenceList
+        List<String> wordStream = sentenceList
                 .stream()
-                .flatMap(s -> Arrays.stream(s.split(" "))); // 1:N, when Map is 1:1
+                .flatMap(s -> Arrays.stream(s.split(" "))) // 1:N, when Map is 1:1
+                .toList(); // earlier code has error her; you cant left a stream silo, instead returned it as a List which will be consumed by downstream processors
+
+        // print the stream wordStream
+        //System.out.printf("Printing the stream [FlatMap applied]: ");
+        wordStream.forEach(System.out::println); // stream is consumed here; A Stream can only be consumed once
 
 
         // Calculate word frequencies (word:count)
-        Map<String, Long> wordFrequencyMap = wordStream
+        Map<Object, Long> wordFrequencyMap = wordStream.stream()
                 .collect(Collectors.groupingBy(
                         String::toLowerCase,
                         Collectors.counting()
@@ -31,12 +35,12 @@ public class FlatMapExample {
         // using flatmap
         numList.stream()
                 .flatMap(num -> Stream.of(num.split(" ")))
-                        .forEach(System.out::println);
+                .forEach(System.out::println);
 
         // using map
-        numList.stream()
-                .map(num -> Stream.of(num.split(" ")))
-                .forEach(System.out::println);
+//        numList.stream()
+//                .map(num -> Stream.of(num.split(" ")))
+//                .forEach(System.out::println);
 
     }
 }

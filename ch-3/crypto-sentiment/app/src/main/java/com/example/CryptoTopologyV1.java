@@ -73,10 +73,11 @@ public class CryptoTopologyV1 {
         );
         getPrint(sentimentScoredStream, "sentiment-scored-tweet-stream"); // Avro encode records
 
-        // C. SINK PROCESSOR
+        // C. SINK PROCESSOR: write the Kafka stream (sentimentScoredStream) into a Kafka topic named "crypto-sentiment"
         // Note: Kafka is a byte-in and bytes-out stream processing platform
+        // Serialization using AVRO
         if (useSchemaRegistry) {
-            sentimentScoredStream.to(
+            sentimentScoredStream.to( // write the Kafka stream (sentimentScoredStream) into a Kafka topic named "crypto-sentiment"
                     "crypto-sentiment",
                     Produced.with(
                             Serdes.ByteArray(),
