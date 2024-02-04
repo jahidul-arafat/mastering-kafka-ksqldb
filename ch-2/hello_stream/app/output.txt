@@ -1,23 +1,13 @@
-[PAPI] 1 ->  TT,3,too Short,0
-[PAPI] 2 ->  ALICE,6,too Short,3
-[PAPI] 3 ->  BOB,4,too Short,1
-[DSL] 2 ->  TEST DATA, 1,13,Full Length,3
-[DSL] 1 ->  SAMPLE DATA,12,Full Length,4
-[DSL] 2 ->  ALICE,6,too Short,3
-[DSL] 3 ->  JAHIDUL ARAFAT,15,Full Length,6
-[DSL] 1 ->  TT,3,too Short,0
-[DSL] 3 ->  BOB,4,too Short,1
-[DSL] 4 ->  ,1,too Short,0
-[DSL] 4 ->  JJ,3,too Short,0
-[DSL] 5 ->  JK,3,too Short,0
-[DSL] 6 ->  IJ,3,too Short,1
-[PAPI] 2 ->  ALICE,6,too Short,3
-[PAPI] 4 ->  ,1,too Short,0
-[PAPI] 5 ->  JK,3,too Short,0
-[PAPI] 1 ->  TT,3,too Short,0
-[PAPI] 4 ->  JJ,3,too Short,0
-[PAPI] 6 ->  IJ,3,too Short,1
-[PAPI] 3 ->  BOB,4,too Short,1
-[PAPI] 100 ->  KK,3,too Short,0
-[PAPI] 200 ->  JL,3,too Short,0
-[PAPI] 300 ->  BBBBB,6,too Short,0
+[DSL] 1 ->  JAHIDUL ARAFAT,15,Full Length,6
+[DSL] 2 ->  OK, I AM GOOD TO GO,20,Full Length,7
+[DSL] test ->  DATA,5,too Short,2
+[PAPI] 2 ->  OK, I AM GOOD TO GO,20,Full Length,7
+[PAPI] 1 ->  JAHIDUL ARAFAT,15,Full Length,6
+[PAPI] test ->  DATA,5,too Short,2
+[PAPI] 10 ->  DATA10,7,too Short,2
+[PAPI] 20 ->  DATA20,7,too Short,2
+[PAPI] 30 ->  DATA30,7,too Short,2
+[DSL] 30 ->  DATA30,7,too Short,2
+[DSL] 10 ->  DATA10,7,too Short,2
+[DSL] 20 ->  DATA20,7,too Short,2
+[DSL] 100 ->  DATA100,8,too Short,2
