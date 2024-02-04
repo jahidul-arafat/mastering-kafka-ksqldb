@@ -1,2 +1,2 @@
 # mastering-kafka-ksqldb
-OReilly Implementation by Jahidul Arafat as a part of High Performance Computing
+Desinged and Enhanced by Jahidul Arafat as a part of High Performance Computing
