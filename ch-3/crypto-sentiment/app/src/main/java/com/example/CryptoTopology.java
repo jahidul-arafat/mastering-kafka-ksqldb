@@ -13,6 +13,8 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.*;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -165,6 +167,9 @@ public class CryptoTopology {
 
         // Return the topology to App.main()
         Topology topology = builder.build();
+
+
+
         return topology;
 
     }

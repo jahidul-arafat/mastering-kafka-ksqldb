@@ -17,7 +17,7 @@ plugins {
 
 ext{
     avroVersion = "1.11.0"
-    kafkaVersion = "2.7.0"
+    kafkaVersion = "3.5.1"
 }
 
 repositories {
@@ -72,6 +72,9 @@ dependencies {
         exclude group: 'org.apache.kafka', module: 'kafka-clients' // exclude the incompatible transitive dependency at the time of writing to the output Kafka Topic
     }
 
+    // for jetbrain annotations
+    implementation 'org.jetbrains:annotations:22.0.0'
+
 
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.22'
@@ -91,7 +94,7 @@ tasks.withType(JavaCompile) {
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(20)
+        languageVersion = JavaLanguageVersion.of(20) // cant change to JavaLanguageVersion 21, JCTree error will trigger
     }
 }
 

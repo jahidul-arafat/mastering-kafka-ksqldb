@@ -18,10 +18,11 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static com.example.StreamTransformationLogic.topologyDescriptor;
+
 
 public class DslExample {
     // Define a constant
-    public static final String FILENAME = "output.txt"; // transformed Stream data/event/record will be written here
     public static final String APP_TYPE = "DSL";
 
     public static void main(String[] args) {
@@ -70,6 +71,10 @@ public class DslExample {
         Topology topology = builder.build();
         KafkaStreams streams = new KafkaStreams(topology, config);
         streams.start();
+
+        // write the topology descriptor to a file
+        topologyDescriptor(topology);
+
 
         // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));

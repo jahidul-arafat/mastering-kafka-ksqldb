@@ -1,5 +1,6 @@
 package com.example;
 
+import org.apache.kafka.streams.Topology;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedWriter;
@@ -9,7 +10,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static com.example.DslExample.FILENAME;
+import static com.example.App.FILENAME;
+import static com.example.App.TOPOLOGY_DESC;
 
 // Common Stream Processing Logic for both DSL and Processing API
 public class StreamTransformationLogic {
@@ -78,6 +80,15 @@ public class StreamTransformationLogic {
         } catch (IOException e) {
             e.printStackTrace();
             // Handle the exception as needed (e.g., log it or throw it)
+        }
+    }
+
+    public static void topologyDescriptor(@NotNull Topology topology) {
+        // describe the topology and write it to a file
+        try (FileWriter fw = new FileWriter(TOPOLOGY_DESC)) {
+            fw.write(topology.describe().toString());
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

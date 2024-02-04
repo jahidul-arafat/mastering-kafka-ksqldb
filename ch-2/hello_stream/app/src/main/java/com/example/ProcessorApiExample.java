@@ -7,6 +7,8 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 
+import static com.example.StreamTransformationLogic.topologyDescriptor;
+
 // ProcessorApi lacks of the abstractions provided by DSL
 public class ProcessorApiExample {
     public static void main(String[] args) {
@@ -33,6 +35,13 @@ public class ProcessorApiExample {
         // build the topology and start streaming
         KafkaStreams streams = new KafkaStreams(topology, config);
         streams.start();
+
+        // write the topology descriptor to a file
+        topologyDescriptor(topology);
+
+
+        // close Kafka Streams when the JVM shuts down (e.g. SIGTERM)
+        Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
 
 

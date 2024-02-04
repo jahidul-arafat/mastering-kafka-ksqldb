@@ -1,5 +1,7 @@
 # mastering-kafka-ksqldb
-OReilly Implementation by Jahidul Arafat as a part of High Performance Computing
+OReilly Implementation by Jahidul Arafat as a part of High Performance Computing.
+
+Visualize Kafka Stream Topology: https://zz85.github.io/kafka-streams-viz/
 ```bash
 # To setup: Make sure to run the docker-compose.yml file
 # comment the kafka-create-topics and schema-registry script in the docker-compose.yml, then run

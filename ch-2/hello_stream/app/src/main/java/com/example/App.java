@@ -4,6 +4,10 @@
 package com.example;
 
 public class App {
+    // Common class Attributes for both DSL and Processing API
+    public static final String FILENAME = "output.txt"; // transformed Stream data/event/record will be written here
+    public static final String TOPOLOGY_DESC = "src/main/resources/topology.json";
+
     public String getGreeting() {
         return "Hello World!";
     }
