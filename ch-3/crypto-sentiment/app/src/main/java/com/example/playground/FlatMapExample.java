@@ -16,6 +16,7 @@ public class FlatMapExample {
 
         // print the stream wordStream
         //System.out.printf("Printing the stream [FlatMap applied]: ");
+        System.out.println(wordStream);
         wordStream.forEach(System.out::println); // stream is consumed here; A Stream can only be consumed once
 
 
@@ -26,6 +27,7 @@ public class FlatMapExample {
                         Collectors.counting()
                 ));
 
+        System.out.println(wordFrequencyMap);
         wordFrequencyMap.forEach((word, count) -> System.out.println(word + ":" + count));
 
         // flatMap vs Map
